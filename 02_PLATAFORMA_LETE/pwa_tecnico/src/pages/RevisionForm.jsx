@@ -44,15 +44,10 @@ const keyframesStyle = `
 `;
 // ---------------------------------------------------
 
-// --- NUEVO: Helper hook para leer query params ---
-function useQuery() {
-  return new URLSearchParams(useLocation().search);
-}
+import { useParams } from 'react-router-dom';
 
 function RevisionForm() {
-  // --- LÓGICA DE CARGA DE DATOS (NUEVA) ---
-  const query = useQuery();
-  const token = query.get('token');
+  const { casoId } = useParams();
   const navigate = useNavigate();
   
   const [caso, setCaso] = useState(null); // Guardará los datos del caso
@@ -101,39 +96,26 @@ function RevisionForm() {
     recomendaciones_tecnico: '',
   });
 
-  // --- NUEVO: useEffect para cargar el caso usando el token ---
   useEffect(() => {
-    if (!token) {
-      setLoadError('Token no válido o no proporcionado.');
-      setIsLoading(false);
-      return;
-    }
-
     const fetchCaso = async () => {
       setIsLoading(true);
       try {
-        // 1. Llamar a la API pública que creamos en el backend
-        const response = await api.get(`/casos/publico/${token}`);
+        const response = await api.get(`/casos/${casoId}`);
         const casoData = response.data;
-        
-        // 2. Guardar los datos del caso
         setCaso(casoData);
-        
-        // 3. ¡Importante! Poner el ID del caso en el formulario
         setFormData(prev => ({
           ...prev,
           caso_id: casoData.id,
         }));
-        
       } catch (err) {
-        setLoadError('No se pudo cargar la información del caso. El token puede ser inválido o el caso no existe.');
+        setLoadError('No se pudo cargar la información del caso. Es posible que no tengas permiso para verlo.');
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchCaso();
-  }, [token]); // Se ejecuta una vez cuando el token se lee de la URL
+  }, [casoId]);
 
   // --- (El resto de tus funciones: handleChange, handleAddEquipo, etc. no cambian) ---
   const handleChange = (e) => {

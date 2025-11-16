@@ -79,8 +79,7 @@ router.post('/', requireAuth, async (req, res) => {
 
     const caso_id = nuevoCaso.id;
 
-    // --- TAREA 2: Generar Token y preparar datos E!A ---
-    const magicToken = randomUUID();
+    // --- TAREA 2: Preparar datos E!A ---
     const start_datetime = `${fecha}T${hora}:00`;
     const startObj = new Date(start_datetime);
     const endObj = new Date(startObj.getTime() + (duracion_horas * 60 * 60 * 1000));
@@ -88,8 +87,7 @@ router.post('/', requireAuth, async (req, res) => {
     const start_datetime_utc = startObj.toISOString().slice(0, 19).replace('T', ' ');
 
     const notas_estructuradas = JSON.stringify({
-      caso_id: caso_id,
-      magic_token: magicToken
+      caso_id: caso_id
     });
     const hash = randomUUID();
 

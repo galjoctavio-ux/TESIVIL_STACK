@@ -7,25 +7,20 @@ import {
   getCasos, 
   createCaso, 
   updateCaso, 
-  getCasoPublico, // <-- AÑADIDO
+  getCasoById, // <-- CAMBIADO
   createCasoFromCotizacion
 } from '../controllers/casos.controller.js';
 
 const router = Router();
-
-// --- NUEVA RUTA PÚBLICA PARA MAGIC LINK ---
-// (Sin authRequired, es pública pero segura por el token)
-router.get(
-  '/publico/:token', // Usamos el token como parámetro
-  getCasoPublico
-);
-// ------------------------------------------
 
 // RUTAS ACTUALIZADAS (Middleware por ruta)
 
 // GET /lete/api/casos (Admin: ver todos | Tecnico: ver los suyos)
 // Primero requireAuth, y LUEGO el controlador decidirá
 router.get('/', requireAuth, getCasos);
+
+// --- NUEVA RUTA PROTEGIDA PARA OBTENER UN CASO POR ID ---
+router.get('/:id', requireAuth, getCasoById);
 
 // POST /lete/api/casos (Admin: crear nuevo)
 // Solo para Admins

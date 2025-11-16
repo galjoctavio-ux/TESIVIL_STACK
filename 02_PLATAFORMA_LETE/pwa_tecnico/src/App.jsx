@@ -21,10 +21,18 @@ function App() {
         {/* --- RUTA PÚBLICA "MAGIC LINK" --- 
             La sacamos de ProtectedRoute. Es segura por el token.
         ---*/}
-        <Route path="/revision" element={<RevisionForm />} /> 
+        {/* <Route path="/revision" element={<RevisionForm />} />  */}
 
 
         {/* --- RUTAS PROTEGIDAS --- */}
+        <Route
+          path="/revision/:casoId"
+          element={
+            <ProtectedRoute>
+              <RevisionForm />
+            </ProtectedRoute>
+          }
+        />
         <Route 
           path="/casos" 
           element={

@@ -143,7 +143,7 @@ function CasosList() {
                   >
                     📍 Mapa
                   </button>
-                  <Link to={`/revision?token=${caso.token}`} style={{ textDecoration: 'none', flex: 1, display: 'flex' }}>
+                  <Link to={`/revision/${caso.id}`} style={{ textDecoration: 'none', flex: 1, display: 'flex' }}>
                     <button
                       style={{
                         ...actionButtonStyles,

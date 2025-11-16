@@ -101,41 +101,14 @@ export const updateCaso = async (req, res) => {
 D  }
 };
 
-// --- AÑADIDO: Controlador para el "Magic Link" ---
-export const getCasoPublico = async (req, res) => {
-  const { token } = req.params; // El UUID 'f47ac10b-...'
-
-  if (!token) {
-    return res.status(400).json({ message: 'Token no proporcionado.' });
-  }
+// --- NUEVO: Controlador para obtener un caso por ID ---
+export const getCasoById = async (req, res) => {
+  const { id: casoId } = req.params;
+  const { id: userId, rol } = req.user;
 
   try {
-    // 1. Buscar el token en E!A (MariaDB)
-    const sql = `
-      SELECT notas_estructuradas 
-      FROM ea_appointments
-      WHERE JSON_EXTRACT(notas_estructuradas, '$.magic_token') = ?;
-    `;
-    
-    const [rows] = await eaPool.query(sql, [token]);
-
-    if (rows.length === 0) {
-      // Si no hay filas, el token es inválido o falso
-      return res.status(404).json({ message: 'Enlace no válido o expirado.' });
-    }
-
-    // 2. Extraer el caso_id del JSON
-    const notas = rows[0].notas_estructuradas; // (viene como string)
-    const { caso_id } = JSON.parse(notas);
-
-    if (!caso_id) {
-      return res.status(500).json({ message: 'Error interno: No se encontró ID del caso.' });
-    }
-
-    // 3. Buscar el caso en tu BD principal (Supabase)
-    // Usamos el SELECT de tu getCasos para ser consistentes
-    const { data: caso, error: supabaseError } = await supabaseAdmin
-      .from('casos') 
+    const { data: caso, error } = await supabaseAdmin
+      .from('casos')
       .select(`
         id,
         cliente_nombre,
@@ -144,21 +117,25 @@ export const getCasoPublico = async (req, res) => {
         comentarios_iniciales,
         status,
         fecha_creacion,
+        tecnico_id,
         tecnico:profiles ( nombre )
-      `) 
-      .eq('id', caso_id)
-      .single(); // Esperamos solo uno
+      `)
+      .eq('id', casoId)
+      .single();
 
-    if (supabaseError || !caso) {
-      return res.status(404).json({ message: 'Caso no encontrado.' });
+    if (error) throw error;
+    if (!caso) return res.status(404).json({ message: 'Caso no encontrado.' });
+
+    // Authorization: Admin can see any case, technician can only see their own.
+    if (rol === 'admin' || (rol === 'tecnico' && caso.tecnico_id === userId)) {
+      return res.json(caso);
     }
 
-    // 4. ¡Éxito! Enviar los datos del caso a la PWA
-    res.json(caso);
+    return res.status(403).json({ message: 'No autorizado para ver este caso.' });
 
   } catch (error) {
-    console.error('Error al validar magic link:', error);
-    res.status(500).json({ message: 'Error al procesar el enlace.' });
+    console.error('Error al obtener caso por ID:', error);
+    res.status(500).json({ message: 'Error al obtener el caso.', details: error.message });
   }
 };
 
