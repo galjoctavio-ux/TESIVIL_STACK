@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { obtenerDetalleCotizacion } from '../apiService';
+import { obtenerDetalleCotizacion, obtenerRecursos } from '../apiService';
 
 const EditarCotizacion = () => {
   const { id } = useParams();
@@ -17,7 +17,9 @@ const EditarCotizacion = () => {
 
   const cargarDatos = async () => {
     try {
-      const cotiRes = await obtenerDetalleCotizacion(id);
+      const [cotiRes] = await Promise.all([
+        obtenerDetalleCotizacion(id)
+      ]);
 
       if (cotiRes.status === 'success') {
         setCotizacion(cotiRes.data.header);

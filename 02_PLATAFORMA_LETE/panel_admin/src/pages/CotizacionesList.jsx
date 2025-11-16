@@ -7,10 +7,12 @@ import {
   rechazarCotizacion,
   finalizarProyecto,
   clonarCotizacion,
-  reenviarCorreo
+  reenviarCorreo,
+  powerCloneCotizacion
 } from '../apiService';
 import DetalleCotizacionModal from '../components/DetalleCotizacionModal';
 import CierreProyectoModal from '../components/CierreProyectoModal';
+import PowerCloneModal from '../components/PowerCloneModal';
 
 const CotizacionesList = () => {
   const [cotizaciones, setCotizaciones] = useState([]);
@@ -20,6 +22,7 @@ const CotizacionesList = () => {
 
   const [cotizacionEnRevision, setCotizacionEnRevision] = useState(null);
   const [cotizacionACerrar, setCotizacionACerrar] = useState(null);
+  const [cotizacionAClonar, setCotizacionAClonar] = useState(null);
 
   useEffect(() => {
     cargarCotizaciones();
@@ -87,17 +90,21 @@ const CotizacionesList = () => {
     } catch (error) { alert("Error: " + error.message); }
   };
 
-  const handleClonar = async (id) => {
-    if(!window.confirm("¿Crear una COPIA (Versión B) de esta cotización?")) return;
-    setMensaje("Clonando cotización...");
+  const handleClonar = (id) => {
+    setCotizacionAClonar(id);
+  };
+
+  const handleCloned = async (cotizacionClonada) => {
+    setMensaje("Clonando y creando nueva versión...");
     try {
-      const res = await clonarCotizacion(id);
+      const res = await powerCloneCotizacion(cotizacionClonada);
       if (res.status === 'success') {
         setMensaje(`✅ ${res.data.mensaje}`);
         cargarCotizaciones();
       } else {
         alert("Error al clonar: " + (res.error || "Desconocido"));
       }
+      setCotizacionAClonar(null);
     } catch (error) {
       alert("Error de conexión: " + error.message);
     }
@@ -241,9 +248,9 @@ const CotizacionesList = () => {
                     </>
                   )}
 
-                  {/* EDITAR (Botón Nuevo) */}
-                  <Link to={`/cotizaciones/editar/${coti.id}`} title="Editar Detalle (Maestro)" style={{ padding: '6px 8px', background: '#6610f2', color: 'white', borderRadius: '4px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', border: 'none', cursor: 'pointer' }}>
-                    ✏️
+                  {/* DETALLES (antes Editar) */}
+                  <Link to={`/cotizaciones/editar/${coti.id}`} title="Ver Detalles" style={{ padding: '6px 8px', background: '#17a2b8', color: 'white', borderRadius: '4px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', border: 'none', cursor: 'pointer' }}>
+                    👁️
                   </Link>
 
                   {/* CLONAR */}
@@ -264,6 +271,7 @@ const CotizacionesList = () => {
 
       {cotizacionEnRevision && <DetalleCotizacionModal cotizacion={cotizacionEnRevision} onClose={() => setCotizacionEnRevision(null)} onAutorizar={handleAutorizar} onRechazar={handleRechazar} />}
       {cotizacionACerrar && <CierreProyectoModal cotizacion={cotizacionACerrar} onClose={() => setCotizacionACerrar(null)} onFinalizar={handleFinalizar} />}
+      {cotizacionAClonar && <PowerCloneModal cotizacionId={cotizacionAClonar} onClose={() => setCotizacionAClonar(null)} onCloned={handleCloned} />}
     </div>
   );
 };

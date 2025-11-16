@@ -189,33 +189,34 @@ class CalculosService {
      * ¡ACTUALIZADO! Ahora recibe Estado, Razón de Detención y Estimación IA
      */
     public function guardarCotizacion(
-        array $resultadoCalculo, 
-        string $tecnicoId, 
-        string $tecnicoNombre, 
+        array $resultadoCalculo,
+        string $tecnicoId,
+        string $tecnicoNombre,
         array $clienteData,
-        string $estado = 'ENVIADA',            // <-- Nuevo default
-        ?string $razonDetencion = null,        // <-- Nuevo
-        ?float $estimacionIA = null            // <-- Nuevo
+        string $estado = 'ENVIADA',
+        ?string $razonDetencion = null,
+        ?float $estimacionIA = null,
+        ?string $folio = null
     ): string {
         try {
             $this->db->beginTransaction();
-            $uuid = bin2hex(random_bytes(16)); 
+            $uuid = bin2hex(random_bytes(16));
             $totales = $resultadoCalculo['totales'];
 
             // 1. GUARDAR EN TABLA 'cotizaciones' CON LOS NUEVOS CAMPOS
             $sqlHeader = "INSERT INTO cotizaciones 
-                (uuid, tecnico_id_externo, tecnico_nombre, cliente_nombre, cliente_email, direccion_obra, 
+                (uuid, folio, tecnico_id_externo, tecnico_nombre, cliente_nombre, cliente_email, direccion_obra,
                  horas_estimadas_tecnico,
                  total_materiales_cd, total_mano_obra_cd, 
                  subtotal_venta, monto_iva, precio_venta_final, monto_anticipo, 
                  descuento_pct, estado, razon_detencion, estimacion_ia) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, ?, ?, ?)";
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, ?, ?, ?)";
             
             $this->db->prepare($sqlHeader)->execute([
-                $uuid, $tecnicoId, $tecnicoNombre, $clienteData['nombre'], $clienteData['email'], $clienteData['direccion'],
-                $totales['horas_totales_calculadas'], 
-                $totales['materiales_cd'], $totales['mano_obra_cd'], 
-                $totales['subtotal'], 
+                $uuid, $folio, $tecnicoId, $tecnicoNombre, $clienteData['nombre'], $clienteData['email'], $clienteData['direccion'],
+                $totales['horas_totales_calculadas'],
+                $totales['materiales_cd'], $totales['mano_obra_cd'],
+                $totales['subtotal'],
                 $totales['iva'], $totales['total_venta'], $totales['anticipo_sugerido'],
                 $estado, $razonDetencion, $estimacionIA
             ]);
@@ -492,6 +493,55 @@ class CalculosService {
                 'id' => $nuevoId,
                 'uuid' => $nuevoUuid,
                 'mensaje' => "Clonada exitosamente. Nueva versión: #$nuevoId"
+            ];
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+    }
+
+    public function powerCloneCotizacion(int $idOriginal, array $nuevosItems, array $nuevaMO, string $clienteEmail, string $clienteNombre): array {
+        try {
+            $this->db->beginTransaction();
+
+            // 1. Obtener folio original y determinar el folio base
+            $stmtOriginal = $this->db->prepare("SELECT folio, tecnico_id_externo, tecnico_nombre FROM cotizaciones WHERE id = ?");
+            $stmtOriginal->execute([$idOriginal]);
+            $originalData = $stmtOriginal->fetch(PDO::FETCH_ASSOC);
+            $folioOriginal = $originalData['folio'];
+
+            $folioBase = explode('.', $folioOriginal)[0];
+
+            // 2. Encontrar la última versión para este folio base
+            $stmtVersion = $this->db->prepare("SELECT MAX(CAST(SUBSTRING_INDEX(folio, '.', -1) AS UNSIGNED)) FROM cotizaciones WHERE folio LIKE ?");
+            $stmtVersion->execute(["$folioBase.%"]);
+            $ultimaVersion = $stmtVersion->fetchColumn() ?: 0;
+            $nuevaVersion = $ultimaVersion + 1;
+            $nuevoFolio = "$folioBase.$nuevaVersion";
+
+            // 3. Recalcular y guardar la nueva cotización
+            $resultado = $this->calcularCotizacion($nuevosItems, $nuevaMO);
+
+            $uuid = $this->guardarCotizacion(
+                $resultado,
+                $originalData['tecnico_id_externo'],
+                $originalData['tecnico_nombre'],
+                ['email' => $clienteEmail, 'nombre' => $clienteNombre, 'direccion' => ''],
+                'ENVIADA',
+                null,
+                null,
+                $nuevoFolio
+            );
+
+            $this->db->commit();
+
+            $cotizacionId = $this->db->lastInsertId();
+
+            return [
+                'id' => $cotizacionId,
+                'uuid' => $uuid,
+                'mensaje' => "Clonada exitosamente. Nueva versión: #$nuevoFolio"
             ];
 
         } catch (Exception $e) {

@@ -38,6 +38,15 @@ export const subirXml = async (file) => {
   return await response.json();
 };
 
+export const powerCloneCotizacion = async (cotizacionData) => {
+  const response = await fetch(`${PHP_API_URL}/admin/cotizacion/powerclone`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cotizacionData)
+  });
+  return await response.json();
+};
+
 export const obtenerPendientes = async () => {
   const response = await fetch(`${PHP_API_URL}/admin/pendientes`);
   return await response.json();
