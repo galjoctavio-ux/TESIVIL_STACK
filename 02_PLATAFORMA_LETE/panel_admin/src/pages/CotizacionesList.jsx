@@ -14,6 +14,7 @@ import DetalleCotizacionModal from '../components/DetalleCotizacionModal';
 import CierreProyectoModal from '../components/CierreProyectoModal';
 import PowerCloneModal from '../components/PowerCloneModal';
 import AutorizarCotizacionModal from '../components/AutorizarCotizacionModal';
+import AgendarCotizacionModal from '../components/AgendarCotizacionModal';
 
 const CotizacionesList = () => {
   const [cotizaciones, setCotizaciones] = useState([]);
@@ -25,6 +26,7 @@ const CotizacionesList = () => {
   const [cotizacionACerrar, setCotizacionACerrar] = useState(null);
   const [cotizacionAClonar, setCotizacionAClonar] = useState(null);
   const [cotizacionAAutorizar, setCotizacionAAutorizar] = useState(null);
+  const [cotizacionAAgendar, setCotizacionAAgendar] = useState(null);
 
   useEffect(() => {
     cargarCotizaciones();
@@ -133,6 +135,7 @@ const CotizacionesList = () => {
     switch (estado) {
         case 'PENDIENTE_AUTORIZACION': return <span style={{background:'#ffc107',color:'#000',padding:'4px 8px',borderRadius:'4px',fontSize:'0.85em',fontWeight:'bold'}}>⚠️ REVISIÓN</span>;
         case 'ENVIADA': return <span style={{background:'#28a745',color:'#fff',padding:'4px 8px',borderRadius:'4px',fontSize:'0.85em'}}>✅ ENVIADA</span>;
+        case 'AUTORIZADA': return <span style={{background:'#007bff',color:'#fff',padding:'4px 8px',borderRadius:'4px',fontSize:'0.85em'}}>👍 AUTORIZADA</span>;
         case 'COMPLETADA': return <span style={{background:'#343a40',color:'#fff',padding:'4px 8px',borderRadius:'4px',fontSize:'0.85em'}}>🏁 COMPLETADA</span>;
         case 'RECHAZADA': return <span style={{background:'#dc3545',color:'#fff',padding:'4px 8px',borderRadius:'4px',fontSize:'0.85em'}}>❌ RECHAZADA</span>;
         default: return <span style={{background:'#6c757d',color:'#fff',padding:'4px 8px',borderRadius:'4px',fontSize:'0.85em'}}>{estado}</span>;
@@ -255,6 +258,12 @@ const CotizacionesList = () => {
                     </>
                   )}
 
+                  {coti.estado === 'AUTORIZADA' && (
+                    <button onClick={() => setCotizacionAAgendar(coti)} title="Agendar" style={{ padding: '6px 8px', background: '#ffc107', color: 'black', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                      📅
+                    </button>
+                  )}
+
                   {/* DETALLES (antes Editar) */}
                   <Link to={`/cotizaciones/editar/${coti.id}`} title="Ver Detalles" style={{ padding: '6px 8px', background: '#17a2b8', color: 'white', borderRadius: '4px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', border: 'none', cursor: 'pointer' }}>
                     👁️
@@ -285,6 +294,16 @@ const CotizacionesList = () => {
           onClose={() => setCotizacionAAutorizar(null)}
           onConfirm={() => {
             setCotizacionAAutorizar(null);
+            cargarCotizaciones();
+          }}
+        />
+      )}
+      {cotizacionAAgendar && (
+        <AgendarCotizacionModal
+          cotizacion={cotizacionAAgendar}
+          onClose={() => setCotizacionAAgendar(null)}
+          onConfirm={() => {
+            setCotizacionAAgendar(null);
             cargarCotizaciones();
           }}
         />
