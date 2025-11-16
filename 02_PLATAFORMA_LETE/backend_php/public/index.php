@@ -170,6 +170,18 @@ elseif ($uri === '/api/admin/cotizacion/clonar' && $_SERVER['REQUEST_METHOD'] ==
     $controller = new CotizacionController();
     $controller->clonarCotizacion();
 }
+// RUTA S.2: Power Clone (POST)
+elseif ($uri === '/api/admin/cotizacion/powerclone' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header("Content-Type: application/json; charset=UTF-8");
+    $controller = new CotizacionController();
+    $controller->powerCloneCotizacion();
+}
+// RUTA S.2: Power Clone (POST)
+elseif ($uri === '/api/admin/cotizacion/powerclone' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header("Content-Type: application/json; charset=UTF-8");
+    $controller = new CotizacionController();
+    $controller->powerCloneCotizacion();
+}
 // RUTA T: Reenviar Correo (POST)
 elseif ($uri === '/api/admin/cotizacion/reenviar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     header("Content-Type: application/json; charset=UTF-8");
