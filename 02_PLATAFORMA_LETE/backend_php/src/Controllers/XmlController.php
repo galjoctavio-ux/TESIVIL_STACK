@@ -29,8 +29,14 @@ class XmlController {
             $contenido = file_get_contents($_FILES['xml']['tmp_name']);
             $resumen = $this->xmlService->procesarXml($contenido);
 
+            // Transformar el resumen al formato deseado
+            $respuesta = [
+                'nuevos' => $resumen['nuevos_auto_creados'] ?? 0,
+                'actualizados' => $resumen['precios_actualizados'] ?? 0,
+            ];
+
             header('Content-Type: application/json');
-            echo json_encode(['status' => 'success', 'data' => $resumen]);
+            echo json_encode($respuesta);
 
         } catch (Exception $e) {
             http_response_code(500);
@@ -62,10 +68,10 @@ class XmlController {
 
         try {
             $this->xmlService->vincularRecurso(
-                intval($input['id_mapeo']), 
+                intval($input['id_mapeo']),
                 intval($input['id_recurso'])
             );
-            
+
             echo json_encode(['status' => 'success', 'message' => 'Vinculado correctamente']);
         } catch (Exception $e) {
             http_response_code(500);

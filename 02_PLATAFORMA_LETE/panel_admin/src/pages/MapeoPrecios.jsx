@@ -43,8 +43,9 @@ const MapeoPrecios = () => {
     setUploadMsg("Procesando...");
     try {
       const res = await subirXml(file);
-      if (res.status === 'success') {
-        setUploadMsg(`✅ ${res.data.nuevos_mapeos} nuevos, ${res.data.precios_actualizados} actualizados.`);
+      // BUGFIX: Leer `res.nuevos` en vez de `res.data.nuevos_mapeos`
+      if (res.nuevos !== undefined) {
+        setUploadMsg(`✅ ${res.nuevos} nuevos, ${res.actualizados} actualizados.`);
         cargarDatos();
       } else {
         setUploadMsg(`❌ ${res.error}`);
@@ -91,28 +92,6 @@ const MapeoPrecios = () => {
           <p style={{ fontSize: '0.9em', color: '#666' }}>{uploadMsg}</p>
         </div>
 
-        {/* CAJA 2: CREAR MATERIAL */}
-        <div style={{ flex: 1, background: '#e3f2fd', padding: '15px', borderRadius: '8px', minWidth: '300px' }}>
-          <h4>✨ 2. ¿No existe? Créalo aquí</h4>
-          <div style={{ display: 'flex', gap: '5px' }}>
-            <input 
-              placeholder="Nombre (ej. Varilla 1/2)" 
-              value={nuevoNombre}
-              onChange={e => setNuevoNombre(e.target.value)}
-              style={{ flex: 2, padding: '5px' }}
-            />
-            <input 
-              placeholder="Unidad (pza, m)" 
-              value={nuevaUnidad}
-              onChange={e => setNuevaUnidad(e.target.value)}
-              style={{ flex: 1, padding: '5px' }}
-            />
-            <button onClick={handleCrear} style={{ background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-              Crear
-            </button>
-          </div>
-          <p style={{ color: 'green', fontSize: '0.9em', marginTop: '5px' }}>{msgCreacion}</p>
-        </div>
       </div>
 
       <hr style={{ margin: '20px 0' }} />
