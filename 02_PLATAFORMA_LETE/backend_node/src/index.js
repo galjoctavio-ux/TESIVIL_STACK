@@ -6,6 +6,7 @@ import usuariosRoutes from './routes/usuarios.routes.js';
 import casosRoutes from './routes/casos.routes.js';
 import revisionesRoutes from './routes/revisiones.routes.js';
 import citasRoutes from './routes/citas.routes.js';
+import agendaRoutes from './routes/agenda.routes.js'; // Importamos la nueva ruta
 import './services/eaDatabase.js';
 // Cargar variables de entorno
 dotenv.config();
@@ -38,6 +39,7 @@ apiRouter.use('/usuarios', usuariosRoutes);
 apiRouter.use('/casos', casosRoutes);
 apiRouter.use('/revisiones', revisionesRoutes);
 apiRouter.use('/citas', citasRoutes);
+apiRouter.use('/agenda', agendaRoutes); // Registramos la nueva ruta
 
 // ¡IMPORTANTE! Montamos nuestro router en el prefijo que definimos
 app.use('/lete/api', apiRouter);
