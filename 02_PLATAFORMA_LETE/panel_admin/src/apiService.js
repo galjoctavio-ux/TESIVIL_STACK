@@ -5,7 +5,22 @@ const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 // --- TU CONFIGURACIÓN ACTUAL (NODE.JS) ---
 const api = axios.create({
   baseURL: VITE_API_BASE_URL,
+  timeout: 15000,
 });
+
+// Interceptor para inyectar el token en las peticiones
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 api.interceptors.response.use(
   (response) => response,
@@ -23,181 +38,150 @@ api.interceptors.response.use(
 export default api;
 
 // =========================================================
-// --- NUEVO: API PHP (COTI-LETE / GESTIÓN DE XML) ---
+// --- API para el backend de PHP ---
 // =========================================================
-const PHP_API_URL = '/api'; // Nginx redirige esto al puerto 8081
+const phpApi = axios.create({
+  baseURL: '/api', // Nginx redirige esto al puerto 8081
+  timeout: 15000,
+});
+
+// Interceptor para inyectar el token en las peticiones de PHP
+phpApi.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Interceptor de respuesta para el 401 en PHP
+phpApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('user');
+      window.location.href = '/lete/panel/';
+    }
+    return Promise.reject(error);
+  }
+);
+
 
 export const subirXml = async (file) => {
   const formData = new FormData();
   formData.append('xml', file);
-
-  const response = await fetch(`${PHP_API_URL}/xml/upload`, {
-    method: 'POST',
-    body: formData,
-  });
-  return await response.json();
+  const response = await phpApi.post('/xml/upload', formData);
+  return response.data;
 };
 
 export const obtenerPendientes = async () => {
-  const response = await fetch(`${PHP_API_URL}/admin/pendientes`);
-  return await response.json();
+  const response = await phpApi.get('/admin/pendientes');
+  return response.data;
 };
 
 export const obtenerRecursos = async () => {
-  const response = await fetch(`${PHP_API_URL}/recursos`);
-  return await response.json();
+  const response = await phpApi.get('/recursos');
+  return response.data;
 };
 
 export const vincularProducto = async (idMapeo, idRecurso) => {
-  const response = await fetch(`${PHP_API_URL}/admin/vincular`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id_mapeo: idMapeo, id_recurso: idRecurso })
-  });
-  return await response.json();
+  const response = await phpApi.post('/admin/vincular', { id_mapeo: idMapeo, id_recurso: idRecurso });
+  return response.data;
 };
 
 export const crearRecurso = async (nombre, unidad) => {
-  const response = await fetch(`${PHP_API_URL}/recursos`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nombre, unidad, tipo: 'MATERIAL' })
-  });
-  return await response.json();
+  const response = await phpApi.post('/recursos', { nombre, unidad, tipo: 'MATERIAL' });
+  return response.data;
 };
 
 export const updateRecurso = async (id, datos) => {
-  const response = await fetch(`${PHP_API_URL}/recursos/editar`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, ...datos }) 
-  });
-  return await response.json();
+  const response = await phpApi.post('/recursos/editar', { id, ...datos });
+  return response.data;
 };
 
 export const deleteRecurso = async (id) => {
-  const response = await fetch(`${PHP_API_URL}/recursos/eliminar`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  return await response.json();
+  const response = await phpApi.post('/recursos/eliminar', { id });
+  return response.data;
 };
 
 export const obtenerInventarioAdmin = async () => {
-  const response = await fetch(`${PHP_API_URL}/admin/inventario`);
-  return await response.json();
+  const response = await phpApi.get('/admin/inventario');
+  return response.data;
 };
 
 export const aprobarRecurso = async (id) => {
-  const response = await fetch(`${PHP_API_URL}/recursos/aprobar`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  return await response.json();
+  const response = await phpApi.post('/recursos/aprobar', { id });
+  return response.data;
 };
 
 // --- GESTIÓN DE COTIZACIONES ---
 
 export const obtenerListadoCotizaciones = async () => {
-  const response = await fetch(`${PHP_API_URL}/admin/cotizaciones`);
-  return await response.json();
+  const response = await phpApi.get('/admin/cotizaciones');
+  return response.data;
 };
 
 export const aplicarDescuento = async (idCotizacion, porcentaje) => {
-  const response = await fetch(`${PHP_API_URL}/cotizacion/aplicar-descuento`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: idCotizacion, descuento_pct: porcentaje })
-  });
-  
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || `Error del servidor: ${response.status}`);
-  }
-  
-  return await response.json();
+  const response = await phpApi.post('/cotizacion/aplicar-descuento', { id: idCotizacion, descuento_pct: porcentaje });
+  return response.data;
 };
 
 // --- ¡NUEVAS FUNCIONES DE APROBACIÓN (FASE 4)! ---
 
 export const autorizarCotizacion = async (id) => {
-  const response = await fetch(`${PHP_API_URL}/admin/cotizacion/autorizar`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  return await response.json();
+  const response = await phpApi.post('/admin/cotizacion/autorizar', { id });
+  return response.data;
 };
 
 export const rechazarCotizacion = async (id) => {
-  const response = await fetch(`${PHP_API_URL}/admin/cotizacion/rechazar`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  return await response.json();
+  const response = await phpApi.post('/admin/cotizacion/rechazar', { id });
+  return response.data;
 };
 
 export const finalizarProyecto = async (id, gastoMaterial, gastoMo) => {
-  const response = await fetch(`${PHP_API_URL}/admin/cotizacion/finalizar`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-        id, 
-        gasto_material: gastoMaterial, 
-        gasto_mo: gastoMo 
-    })
+  const response = await phpApi.post('/admin/cotizacion/finalizar', {
+      id,
+      gasto_material: gastoMaterial,
+      gasto_mo: gastoMo
   });
-  return await response.json();
+  return response.data;
 };
 
 export const clonarCotizacion = async (id) => {
-  const response = await fetch(`${PHP_API_URL}/admin/cotizacion/clonar`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  return await response.json();
+  const response = await phpApi.post('/admin/cotizacion/clonar', { id });
+  return response.data;
 };
 
 export const reenviarCorreo = async (id) => {
-  const response = await fetch(`${PHP_API_URL}/admin/cotizacion/reenviar`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  return await response.json();
+  const response = await phpApi.post('/admin/cotizacion/reenviar', { id });
+  return response.data;
 };
 
 // --- CONFIGURACIÓN FINANCIERA (SALA DE MÁQUINAS) ---
 
 export const obtenerConfiguracion = async () => {
-  const response = await fetch(`${PHP_API_URL}/admin/configuracion`);
-  return await response.json();
+  const response = await phpApi.get('/admin/configuracion');
+  return response.data;
 };
 
 export const actualizarConfiguracion = async (nuevosValores) => {
-  const response = await fetch(`${PHP_API_URL}/admin/configuracion/actualizar`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ config: nuevosValores })
-  });
-  return await response.json();
+  const response = await phpApi.post('/admin/configuracion/actualizar', { config: nuevosValores });
+  return response.data;
 };
 
 // --- EDITOR MAESTRO ---
 export const obtenerDetalleCotizacion = async (id) => {
-  const response = await fetch(`${PHP_API_URL}/admin/cotizacion/detalle?id=${id}`);
-  return await response.json();
+  const response = await phpApi.get(`/admin/cotizacion/detalle?id=${id}`);
+  return response.data;
 };
 
 export const guardarCambiosCotizacion = async (payload) => {
-  const response = await fetch(`${PHP_API_URL}/admin/cotizacion/guardar-cambios`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  return await response.json();
+  const response = await phpApi.post('/admin/cotizacion/guardar-cambios', payload);
+  return response.data;
 };
