@@ -57,7 +57,7 @@ class PdfController {
         $empresaTel = "33 2639 5038";
         $empresaEmail = "contacto-lete@tesivil.com";
         $empresaWeb = "www.tesivil.com/lete";
-        $nombreIngeniero = !empty($h['tecnico_nombre']) ? $h['tecnico_nombre'] : 'Ingeniero de Servicio';
+        $nombreAsesor = $h['tecnico_nombre']; // Asignación directa. La lógica de fallback ya está en CotizacionController.
         $fecha = date("d/m/Y", strtotime($h['fecha_creacion']));
         $datosBancariosHtml = nl2br($config['datos_bancarios'] ?? 'Solicitar datos bancarios.');
 
@@ -155,7 +155,7 @@ class PdfController {
                         </td>
                         <td width="40%" style="border-left: 1px solid #dee2e6; padding-left: 15px;">
                             <div class="cliente-label">Asesor Asignado</div>
-                            <div class="cliente-dato">'. htmlspecialchars($nombreIngeniero) .'</div>
+                            <div class="cliente-dato">'. htmlspecialchars($nombreAsesor) .'</div>
                         </td>
                     </tr>
                 </table>

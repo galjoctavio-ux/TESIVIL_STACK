@@ -607,5 +607,33 @@ class CalculosService {
             // throw new Exception("No se pudo actualizar la URL del PDF.");
         }
     }
+
+    /**
+     * Obtiene el nombre de un usuario a partir de su ID externo.
+     * @param string $userId El ID externo del usuario (de Firebase, etc.).
+     * @return string|null El nombre del usuario o null si no se encuentra.
+     */
+    public function obtenerNombreUsuarioPorId(string $userId): ?string {
+        try {
+            // Asumimos que la tabla de usuarios se llama 'users' y tiene 'id_externo' y 'nombre'
+            $sql = "SELECT nombre FROM users WHERE id_externo = ? LIMIT 1";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([$userId]);
+            $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // Si encontramos un resultado, devolvemos el nombre.
+            if ($resultado && !empty($resultado['nombre'])) {
+                return $resultado['nombre'];
+            }
+
+            // Si no, devolvemos null para que el controlador decida qué hacer.
+            return null;
+
+        } catch (PDOException $e) {
+            // En caso de error de base de datos, lo registramos para no detener la ejecución.
+            error_log("Error al obtener nombre de usuario por ID ($userId): " . $e->getMessage());
+            return null;
+        }
+    }
 }
 ?>

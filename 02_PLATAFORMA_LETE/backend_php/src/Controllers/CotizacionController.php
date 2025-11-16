@@ -70,17 +70,24 @@ class CotizacionController {
             }
 
             // D. Guardado en Base de Datos
+            // Si el nombre del cliente viene vacío, asignamos "Público en General".
+            $clienteNombre = (!empty(trim($input['cliente_nombre']))) ? trim($input['cliente_nombre']) : 'Público en General';
             $clienteData = [
-                'nombre' => $input['cliente_nombre'] ?? 'Cliente',
+                'nombre' => $clienteNombre,
                 'direccion' => $input['cliente_direccion'] ?? '',
                 'email' => $input['cliente_email']
             ];
-            $tecnicoNombre = $input['tecnico_nombre'] ?? 'Técnico';
+
+            // Obtenemos el nombre real del asesor desde la BD usando el nuevo método.
+            $nombreAsesorDesdeBD = $this->calculosService->obtenerNombreUsuarioPorId($input['tecnico_id']);
+
+            // Prioridad para el nombre del asesor: 1) Nombre desde BD, 2) Nombre enviado por el frontend, 3) Un genérico.
+            $tecnicoNombreFinal = $nombreAsesorDesdeBD ?? $input['tecnico_nombre'] ?? 'Asesor de Servicio';
 
             $uuid = $this->calculosService->guardarCotizacion(
                 $resultado, 
                 $input['tecnico_id'], 
-                $tecnicoNombre,
+                $tecnicoNombreFinal,
                 $clienteData,
                 $estado,
                 $razonDetencion,
