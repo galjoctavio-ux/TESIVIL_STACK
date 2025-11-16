@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { subirXml, obtenerPendientes, obtenerRecursos, vincularProducto, crearRecurso } from '../apiService';
 
 const MapeoPrecios = () => {
@@ -6,7 +7,7 @@ const MapeoPrecios = () => {
   const [pendientes, setPendientes] = useState([]);
   const [recursos, setRecursos] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Estados de UI
   const [uploadMsg, setUploadMsg] = useState('');
   const [selecciones, setSelecciones] = useState({});
@@ -66,7 +67,7 @@ const MapeoPrecios = () => {
   // 3. CREAR NUEVO (ALTA RÁPIDA)
   const handleCrear = async () => {
     if (!nuevoNombre || !nuevaUnidad) return alert("Pon nombre y unidad");
-    
+
     const res = await crearRecurso(nuevoNombre, nuevaUnidad);
     if (res.status === 'success') {
       setMsgCreacion(`✅ Creado: ${nuevoNombre}`);
@@ -82,8 +83,11 @@ const MapeoPrecios = () => {
 
   return (
     <div style={{ padding: '20px' }}>
+      <Link to="/dashboard" style={{ textDecoration: 'none', color: '#007bff', marginBottom: '20px', display: 'inline-block' }}>
+        &larr; Volver al Dashboard
+      </Link>
       <h2>💰 Gestión de Costos</h2>
-      
+
       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
         {/* CAJA 1: SUBIR XML */}
         <div style={{ flex: 1, background: '#f8f9fa', padding: '15px', borderRadius: '8px', minWidth: '300px' }}>
@@ -108,7 +112,7 @@ const MapeoPrecios = () => {
             </tr>
           </thead>
           <tbody>
-            {pendientes.length === 0 ? <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center' }}>Todo limpio ✅</td></tr> : 
+            {pendientes.length === 0 ? <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center' }}>Todo limpio ✅</td></tr> :
             pendientes.map((p) => (
               <tr key={p.id} style={{ borderBottom: '1px solid #ddd' }}>
                 <td style={{ padding: '10px' }}>
@@ -117,7 +121,7 @@ const MapeoPrecios = () => {
                 </td>
                 <td style={{ padding: '10px', color: 'green' }}>${parseFloat(p.ultimo_precio_registrado).toFixed(2)}</td>
                 <td style={{ padding: '10px' }}>
-                  <select 
+                  <select
                     style={{ width: '100%', padding: '8px' }}
                     onChange={(e) => setSelecciones({ ...selecciones, [p.id]: e.target.value })}
                   >
@@ -128,7 +132,7 @@ const MapeoPrecios = () => {
                   </select>
                 </td>
                 <td style={{ padding: '10px' }}>
-                  <button 
+                  <button
                     onClick={() => handleVincular(p.id)}
                     style={{ background: '#28a745', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}
                   >

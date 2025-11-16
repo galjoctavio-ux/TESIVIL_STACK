@@ -26,7 +26,7 @@ const ConfiguracionFinanciera = () => {
   };
 
   const handleChange = (clave, nuevoValor) => {
-    const nuevaConfig = config.map(item => 
+    const nuevaConfig = config.map(item =>
       item.clave === clave ? { ...item, valor: nuevoValor } : item
     );
     setConfig(nuevaConfig);
@@ -34,10 +34,10 @@ const ConfiguracionFinanciera = () => {
 
   const handleGuardar = async () => {
     if (!window.confirm("¿Confirmar cambios en las variables financieras? Esto afectará a todas las cotizaciones NUEVAS.")) return;
-    
+
     setSaving(true);
     setMensaje('');
-    
+
     // Convertir array a objeto clave:valor para la API
     const objetoEnvio = {};
     config.forEach(item => {
@@ -60,12 +60,14 @@ const ConfiguracionFinanciera = () => {
 
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+      <Link to="/dashboard" style={{ textDecoration: 'none', color: '#007bff', marginBottom: '20px', display: 'inline-block' }}>
+        &larr; Volver al Dashboard
+      </Link>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
           <h2 style={{ margin: 0 }}>⚙️ Sala de Máquinas</h2>
           <small style={{ color: '#666' }}>Variables Financieras Globales</small>
         </div>
-        <Link to="/dashboard" style={{ textDecoration: 'none', color: '#007bff' }}>&larr; Volver</Link>
       </div>
 
       {mensaje && <div style={{ padding: '10px', marginBottom: '15px', background: mensaje.includes('Error') ? '#f8d7da' : '#d4edda', borderRadius: '5px' }}>{mensaje}</div>}
@@ -87,15 +89,15 @@ const ConfiguracionFinanciera = () => {
                     {item.clave}
                   </td>
                   <td style={{ padding: '12px', width: '150px' }}>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       step="0.01"
                       value={item.valor}
                       onChange={(e) => handleChange(item.clave, e.target.value)}
-                      style={{ 
-                        width: '100%', 
-                        padding: '8px', 
-                        borderRadius: '4px', 
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        borderRadius: '4px',
                         border: '1px solid #ccc',
                         fontWeight: 'bold',
                         textAlign: 'right'
@@ -111,16 +113,16 @@ const ConfiguracionFinanciera = () => {
           </table>
 
           <div style={{ marginTop: '20px', textAlign: 'right' }}>
-            <button 
+            <button
               onClick={handleGuardar}
               disabled={saving}
-              style={{ 
-                padding: '12px 25px', 
-                background: saving ? '#6c757d' : '#28a745', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '5px', 
-                fontSize: '16px', 
+              style={{
+                padding: '12px 25px',
+                background: saving ? '#6c757d' : '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                fontSize: '16px',
                 cursor: saving ? 'wait' : 'pointer',
                 fontWeight: 'bold'
               }}

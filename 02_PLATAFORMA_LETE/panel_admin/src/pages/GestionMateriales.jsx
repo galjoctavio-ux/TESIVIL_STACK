@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { obtenerInventarioAdmin, updateRecurso, deleteRecurso, aprobarRecurso, crearRecurso } from '../apiService';
 import Modal from 'react-modal'; // Usaremos un modal
 
@@ -87,6 +88,9 @@ const GestionMateriales = () => {
 
   return (
     <div style={{padding: '20px'}}>
+      <Link to="/dashboard" style={{ textDecoration: 'none', color: '#007bff', marginBottom: '20px', display: 'inline-block' }}>
+        &larr; Volver al Dashboard
+      </Link>
       <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
         <h2>🗄️ Inventario Total (Admin)</h2>
         <button onClick={handleAbrirModal} style={{background: '#007bff', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>
