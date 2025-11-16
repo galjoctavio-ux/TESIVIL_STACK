@@ -94,7 +94,7 @@ const Cotizador = () => {
   useEffect(() => {
     const fetchRecursos = async () => {
       try {
-        const res = await api.get('/recursos');
+        const res = await api.get('/api/recursos');
         if (res.data.status === 'success') {
           setCatalogo(res.data.data);
         } else {
