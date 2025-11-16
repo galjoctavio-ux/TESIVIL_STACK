@@ -41,14 +41,7 @@ export const getCasos = async (req, res) => {
     // Construimos la query base
     let query = supabaseAdmin
       .from('casos')
-      .select(`
-        id,
-        cliente_nombre,
-        cliente_direccion,
-        status,
-        fecha_creacion,
-        tecnico:profiles ( nombre )
-      `)
+      .select('id, cliente_nombre, status, fecha_creacion, tecnico(nombre), tipo')
       .order('fecha_creacion', { ascending: false });
 
     // ¡Lógica de Roles!

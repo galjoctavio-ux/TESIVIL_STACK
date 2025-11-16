@@ -2,21 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../apiService';
 import { Link } from 'react-router-dom';
+import '../App.css'; // Importa el CSS
 
 const listStyle = {
   backgroundColor: '#F8FAFC',
   minHeight: '100vh',
   padding: '32px',
   paddingBottom: '100px' // Espacio extra abajo para que el botón flotante no tape el último caso
-};
-
-const cardStyle = {
-  backgroundColor: '#FFFFFF',
-  borderRadius: '8px',
-  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-  padding: '24px',
-  marginBottom: '20px',
-  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
 };
 
 const headerStyles = {
@@ -125,8 +117,13 @@ function CasosList() {
                 <p>Puedes crear una cotización nueva con el botón azul.</p>
             </div>
           ) : (
-            filteredCasos.map(caso => (
-              <div key={caso.id} style={cardStyle}>
+            filteredCasos.map(caso => {
+              const cardClassName = `card ${
+                caso.tipo === 'alto_consumo' ? 'card-amarillo' :
+                caso.tipo === 'proyecto' ? 'card-azul' : ''
+              }`;
+              return (
+              <div key={caso.id} className={cardClassName}>
                 <h3 style={{ fontSize: '20px', color: '#10213F', marginBottom: '12px' }}>
                   Cliente: {caso.cliente_nombre}
                 </h3>
@@ -161,7 +158,7 @@ function CasosList() {
                   </Link>
                 </div>
               </div>
-            ))
+            )})
           )}
         </div>
       )}
