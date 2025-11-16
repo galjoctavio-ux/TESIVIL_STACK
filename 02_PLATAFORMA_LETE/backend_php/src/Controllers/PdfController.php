@@ -13,7 +13,6 @@ class PdfController {
     private string $apiKey;
 
     public function __construct() {
-        // Incluir el bootstrap para cargar las variables de entorno
         require_once __DIR__ . '/../../config/bootstrap.php';
         if (!isset($_ENV['GEMINI_API_KEY'])) {
             throw new \Exception("Error: La variable de entorno GEMINI_API_KEY no está configurada.");
@@ -23,132 +22,37 @@ class PdfController {
         $this->gemini = new GeminiService();
     }
 
-    // --- 1. MEJORA DE TEXTO (IA GEMINI 2.5) ---
-    private function mejorarTextoConIA(string $textoOriginal): string {
-        if (strlen($textoOriginal) < 3 || empty($textoOriginal)) return $textoOriginal;
-
-        // Usamos el modelo más avanzado del segundo archivo
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . $this->apiKey;
-        
-        $prompt = "Eres un ingeniero experto redactando presupuestos. Reescribe esta tarea para que suene técnica y formal sin ser demasiado exagerado, el objetivo final es un cliente común. NO uses la palabra 'suministro' si es solo mano de obra. Entrada: '$textoOriginal'. Salida (SOLO EL TEXTO):";
-
-        $data = [
-            'contents' => [['parts' => [['text' => $prompt]]]],
-            'generationConfig' => ['temperature' => 0.3, 'maxOutputTokens' => 8000]
-        ];
-
-        try {
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            
-            $response = curl_exec($ch);
-            
-            if ($response === false) {
-                curl_close($ch);
-                return $textoOriginal;
-            }
-            
-            curl_close($ch);
-            $json = json_decode($response, true);
-            return trim($json['candidates'][0]['content']['parts'][0]['text'] ?? $textoOriginal);
-
-        } catch (Exception $e) {
-            return $textoOriginal; 
-        }
-    }
-
-    // --- 2. NOMBRE DE ARCHIVO INTELIGENTE (IA) ---
-    private function generarNombreArchivoIA(array $materiales, string $nombreCliente): string {
-        if (empty($materiales)) {
-            return preg_replace('/[^A-Za-z0-9]/', '', $nombreCliente);
-        }
-
-        // Resumen breve para la IA
-        $lista = "";
-        $i = 0;
-        foreach($materiales as $m) {
-            $lista .= $m['nombre'] . ", ";
-            $i++;
-            if($i > 5) break;
-        }
-
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . $this->apiKey;
-        
-        $prompt = "Analiza esta lista de materiales: [$lista]. Genera un nombre de archivo CORTO (max 5 palabras) usando guiones bajos que describa el trabajo. Ejemplo: Instalacion_CCTV_Norte. NO incluyas .pdf. Responde SOLO el nombre.";
-
-        $data = [
-            'contents' => [['parts' => [['text' => $prompt]]]],
-            'generationConfig' => ['temperature' => 0.5, 'maxOutputTokens' => 1000]
-        ];
-
-        try {
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-
-            $response = curl_exec($ch);
-            curl_close($ch);
-            
-            $json = json_decode($response, true);
-            $nombreGenerado = $json['candidates'][0]['content']['parts'][0]['text'] ?? null;
-
-            if ($nombreGenerado) {
-                return preg_replace('/[^A-Za-z0-9_]/', '', trim($nombreGenerado));
-            }
-            return "Proyecto_Electrico"; 
-        } catch (Exception $e) {
-            return "Cotizacion_Generica";
-        }
-    }
-
-    // --- 3. GENERACIÓN DEL PDF (FUSIONADO) ---
-    public function generarPdf(string $uuid): void {
+    // --- NUEVO MÉTODO PÚBLICO PARA GENERACIÓN "ON-WRITE" ---
+    /**
+     * Genera un PDF, lo guarda físicamente y devuelve la URL pública.
+     * @param string $uuid El UUID de la cotización.
+     * @return string|null La URL pública del PDF o null si falla.
+     */
+    public function generarYGuardarPdf(string $uuid): ?string {
         $datos = $this->service->obtenerCotizacionPorUuid($uuid);
-        
         if (!$datos) {
-            http_response_code(404); echo "Cotización no encontrada"; return;
+            error_log("No se encontraron datos para la cotización UUID: " . $uuid);
+            return null;
         }
 
         $h = $datos['header'];
         $idCotizacion = (int)$h['id'];
 
-        // --- A. SISTEMA DE CACHÉ (Del Archivo 1, Mejorado) ---
-        // Definir directorio de guardado
         $dirPdfs = __DIR__ . '/../../public/pdfs/';
         if (!is_dir($dirPdfs)) {
             mkdir($dirPdfs, 0777, true);
         }
 
-        // Buscamos si YA existe un archivo para este ID (C123_*.pdf)
-        // Esto evita llamar a la IA para generar el nombre si el archivo ya existe
-        $archivosExistentes = glob($dirPdfs . "C{$idCotizacion}_*.pdf");
-
-        if (!empty($archivosExistentes)) {
-            $rutaArchivo = $archivosExistentes[0]; // Tomamos el primero encontrado
-            $nombreArchivo = basename($rutaArchivo);
-
-            // Servir directo del disco (Ahorro de IA y recursos)
-            header('Content-Type: application/pdf');
-            header('Content-Disposition: inline; filename="' . $nombreArchivo . '"');
-            header('Content-Length: ' . filesize($rutaArchivo));
-            readfile($rutaArchivo);
-            return;
+        // Limpia archivos antiguos para esta cotización para evitar duplicados
+        $archivosViejos = glob($dirPdfs . "C{$idCotizacion}_*.pdf");
+        foreach ($archivosViejos as $archivo) {
+            unlink($archivo);
         }
 
-        // --- B. SI NO EXISTE, GENERAMOS TODO (Del Archivo 2) ---
-        
         $itemsMateriales = $datos['items_materiales']; 
         $itemsMO = $datos['items_mo'];             
         $config = $datos['global_config'];
 
-        // Datos Empresa y Cliente
         $empresaDir = "Av. Sebastian Bach 4978, Prados Guadalupe, Zapopan, Jal.";
         $empresaTel = "33 2639 5038";
         $empresaEmail = "contacto-lete@tesivil.com";
@@ -157,24 +61,19 @@ class PdfController {
         $fecha = date("d/m/Y", strtotime($h['fecha_creacion']));
         $datosBancariosHtml = nl2br($config['datos_bancarios'] ?? 'Solicitar datos bancarios.');
 
-        // Cálculos (Lógica híbrida para respetar margen)
         $matCD = floatval($h['total_materiales_cd']);
         $moCD = floatval($h['total_mano_obra_cd']);
         $subtotalReal = floatval($h['subtotal_venta']);
         $sumaCD = $matCD + $moCD;
         
-        // Factor para inflar costos directos y llegar al precio de venta (Lógica Archivo 1)
         $factor = ($sumaCD > 0) ? ($subtotalReal / $sumaCD) : 1;
-        
         $matCliente = $matCD * $factor;
-        // El resto se asigna a Mano de Obra para cuadrar el subtotal
         $moCliente = $subtotalReal - $matCliente; 
 
         $iva = floatval($h['monto_iva']);
         $total = floatval($h['precio_venta_final']);
         $anticipo = floatval($h['monto_anticipo']);
 
-        // Manejo de Descuentos (Lógica Archivo 2)
         $tieneDescuento = isset($h['descuento_pct']) && floatval($h['descuento_pct']) > 0;
         $descuentoMonto = 0;
         $subtotalSinDescuento = $subtotalReal;
@@ -185,66 +84,63 @@ class PdfController {
             $subtotalSinDescuento = $subtotalOriginal;
         }
 
-        // Configuración DomPDF
         $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isRemoteEnabled', true); 
         $dompdf = new Dompdf($options);
 
-        // HTML Template (Estilo Avanzado del Archivo 2)
+        // --- INICIO DE LA PLANTILLA HTML REDISEÑADA ---
         $html = '
         <html>
         <head>
+            <meta charset="UTF-8">
             <style>
-                body { font-family: "Helvetica", sans-serif; font-size: 11px; color: #333; line-height: 1.4; }
-                .header-table { width: 100%; margin-bottom: 30px; border-bottom: 3px solid #0056b3; padding-bottom: 15px; }
-                .logo-img { max-height: 70px; }
-                .empresa-info { text-align: right; font-size: 9px; color: #666; }
-                .empresa-info strong { font-size: 11px; color: #0056b3; }
+                @page { margin: 25px; }
+                body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 11px; color: #343a40; line-height: 1.5; }
+                .header-table { width: 100%; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 25px; }
+                .logo-img { max-width: 180px; max-height: 60px; }
+                .empresa-info { text-align: right; font-size: 10px; color: #6c757d; }
+                .empresa-info strong { font-size: 12px; color: #0056b3; }
                 
-                .cliente-box { background-color: #f8f9fa; border-left: 4px solid #0056b3; padding: 15px; margin-bottom: 25px; border-radius: 0 5px 5px 0; }
-                .cliente-label { font-weight: bold; color: #0056b3; font-size: 10px; text-transform: uppercase; margin-bottom: 3px; }
-                .cliente-dato { font-size: 12px; margin-bottom: 8px; }
+                .cliente-box { border: 1px solid #dee2e6; border-left: 5px solid #0056b3; padding: 15px; margin-bottom: 25px; border-radius: 4px; background-color: #f8f9fa; }
+                .cliente-label { font-weight: bold; color: #0056b3; font-size: 9px; text-transform: uppercase; margin-bottom: 4px; }
+                .cliente-dato { font-size: 12px; margin-bottom: 5px; }
+
+                .section-header { background-color: #0056b3; color: white; padding: 8px 12px; font-weight: bold; font-size: 12px; margin-top: 20px; border-radius: 4px 4px 0 0; }
                 
-                .section-header { background-color: #0056b3; color: white; padding: 8px 10px; font-weight: bold; font-size: 10px; text-transform: uppercase; margin-top: 20px; border-radius: 4px 4px 0 0; }
-                
-                .items-table { width: 100%; border-collapse: collapse; border: 1px solid #ddd; border-top: none; }
-                .items-table th { display: none; } 
-                .items-table td { border-bottom: 1px solid #eee; padding: 8px 10px; vertical-align: top; }
+                .items-table { width: 100%; border-collapse: collapse; border: 1px solid #dee2e6; }
+                .items-table th { background-color: #f8f9fa; padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; font-size:10px; text-transform:uppercase; color: #495057; }
+                .items-table td { border-bottom: 1px solid #dee2e6; padding: 9px 10px; vertical-align: top; }
                 .items-table tr:last-child td { border-bottom: none; }
-                .col-cant { width: 10%; text-align: center; font-weight: bold; color: #555; }
-                .col-desc { width: 90%; }
+                .items-table tr:nth-child(even) td { background-color: #f8f9fa; }
+
+                .col-cant { width: 12%; text-align: center; }
+                .col-desc { width: 88%; }
                 
-                .footer-grid { width: 100%; display: table; margin-top: 40px; border-top: 2px solid #eee; padding-top: 20px; }
-                .footer-left { display: table-cell; width: 60%; vertical-align: top; padding-right: 20px; }
-                .footer-right { display: table-cell; width: 40%; vertical-align: top; }
+                .footer-grid { width: 100%; margin-top: 30px; }
+                .footer-left { width: 58%; vertical-align: top; padding-right: 20px; }
+                .footer-right { width: 42%; vertical-align: top; }
                 
-                .bancos-card { border: 1px dashed #ccc; padding: 15px; background: #fffdf0; border-radius: 5px; font-size: 10px; }
+                .bancos-card { border: 1px solid #e9ecef; padding: 15px; border-radius: 4px; font-size: 10px; background: #f8f9fa; }
                 .totales-table { width: 100%; }
-                .totales-table td { padding: 5px 0; text-align: right; }
-                .lbl { font-weight: bold; color: #555; }
-                .num { color: #333; }
-                .total-row { font-size: 15px; font-weight: bold; color: #0056b3; border-top: 2px solid #0056b3; padding-top: 10px !important; }
-                .anticipo-badge { background: #0056b3; color: white; padding: 5px 10px; border-radius: 20px; font-weight: bold; font-size: 11px; display: inline-block; margin-top: 10px; }
+                .totales-table td { padding: 6px 0; text-align: right; }
+                .lbl { color: #495057; }
+                .num { font-weight: bold; color: #212529; }
+                .total-row td { font-size: 16px; font-weight: bold; color: #0056b3; border-top: 2px solid #0056b3; padding-top: 10px !important; }
+                .anticipo-badge { background-color: #0056b3; color: white; padding: 6px 12px; border-radius: 15px; font-weight: bold; font-size: 11px; display: inline-block; }
                 
-                .watermark { position: fixed; bottom: 100px; left: 20%; width: 60%; text-align: center; opacity: 0.05; font-size: 80px; font-weight: bold; color: #000; transform: rotate(-45deg); z-index: -1; }
-                .legal-footer { position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 8px; color: #999; border-top: 1px solid #ddd; padding: 10px 0; }
+                .legal-footer { position: fixed; bottom: -20px; left: 0; right: 0; text-align: center; font-size: 9px; color: #adb5bd; border-top: 1px solid #e9ecef; padding: 8px 0; background: white; }
             </style>
         </head>
         <body>
-            <div class="watermark">PRESUPUESTO</div>
-
             <table class="header-table">
                 <tr>
-                    <td valign="top"><img src="'. $config['logo_url'] .'" class="logo-img"></td>
-                    <td valign="top" class="empresa-info">
+                    <td><img src="'. $config['logo_url'] .'" class="logo-img"></td>
+                    <td class="empresa-info">
                         <strong>LUZ EN TU ESPACIO</strong><br>
                         '. $empresaDir .'<br>
-                        Tel: '. $empresaTel .'<br>
-                        Email: '. $empresaEmail .'<br>
-                        '. $empresaWeb .'<br><br>
-                        <span style="font-size: 12px; color: #333;">COTIZACIÓN <strong>#'. $h['id'] .'</strong></span><br>
-                        Fecha: '. $fecha .'
+                        Tel: '. $empresaTel .' | '. $empresaEmail .' | '. $empresaWeb .'<br><br>
+                        <span style="font-size: 14px; color: #343a40;">COTIZACIÓN <strong>#'. $h['id'] .'</strong></span> | Fecha: '. $fecha .'
                     </td>
                 </tr>
             </table>
@@ -254,109 +150,176 @@ class PdfController {
                     <tr>
                         <td width="60%">
                             <div class="cliente-label">Cliente</div>
-                            <div class="cliente-dato" style="font-size: 14px; font-weight: bold;">'. $h['cliente_nombre'] .'</div>
-                            <div class="cliente-dato">'. $h['direccion_obra'] .'</div>
+                            <div class="cliente-dato" style="font-size: 14px; font-weight: bold;">'. htmlspecialchars($h['cliente_nombre']) .'</div>
+                            <div class="cliente-dato">'. htmlspecialchars($h['direccion_obra']) .'</div>
                         </td>
-                        <td width="40%" style="border-left: 1px solid #ddd; padding-left: 20px;">
+                        <td width="40%" style="border-left: 1px solid #dee2e6; padding-left: 15px;">
                             <div class="cliente-label">Asesor Asignado</div>
-                            <div class="cliente-dato">'. $nombreIngeniero .'</div>
-                            <div class="cliente-dato"><small>Dudas técnicas directas con el asesor</small></div>
+                            <div class="cliente-dato">'. htmlspecialchars($nombreIngeniero) .'</div>
                         </td>
                     </tr>
                 </table>
             </div>
 
-            <div class="section-header">1. Suministro de Materiales</div>
+            <div class="section-header">Conceptos del Proyecto</div>
             <table class="items-table">
+                 <thead>
+                    <tr>
+                        <th class="col-cant">CANT.</th>
+                        <th class="col-desc">DESCRIPCIÓN</th>
+                    </tr>
+                </thead>
                 <tbody>';
         
-        if (empty($itemsMateriales)) {
-            $html .= '<tr><td colspan="2" style="padding:15px; text-align:center; color:#777; font-style:italic;">No aplica suministro de materiales para este proyecto.</td></tr>';
-        } else {
+        if (!empty($itemsMateriales)) {
+             $html .= '<tr><td colspan="2" style="padding: 5px 10px; background: #e9ecef; font-weight:bold; color:#0056b3; font-size:10px;">MATERIALES</td></tr>';
             foreach ($itemsMateriales as $item) {
                 $html .= '
                     <tr>
-                        <td class="col-cant">'. floatval($item['cantidad']) .' <span style="font-size:9px; font-weight:normal;">'. $item['unidad'] .'</span></td>
-                        <td class="col-desc">
-                            <strong>'. $item['nombre'] .'</strong>
-                        </td>
+                        <td class="col-cant">'. floatval($item['cantidad']) .' '. htmlspecialchars($item['unidad']) .'</td>
+                        <td class="col-desc">'. htmlspecialchars($item['nombre']) .'</td>
                     </tr>';
+            }
+        }
+
+        if (!empty($itemsMO)) {
+            $html .= '<tr><td colspan="2" style="padding: 5px 10px; background: #e9ecef; font-weight:bold; color:#0056b3; font-size:10px;">MANO DE OBRA</td></tr>';
+            foreach ($itemsMO as $tarea) {
+                $descMejorada = $this->mejorarTextoConIA($tarea['descripcion']);
+                $html .= '
+                        <tr>
+                            <td class="col-cant">'. floatval($tarea['horas']) .' hrs</td>
+                            <td class="col-desc">'. htmlspecialchars($descMejorada) .'</td>
+                        </tr>';
             }
         }
         $html .= '</tbody></table>
 
-            <div class="section-header">2. Servicios y Mano de Obra Especializada</div>
-            <table class="items-table">
-                <tbody>';
+            <table class="footer-grid">
+                <tr>
+                    <td class="footer-left">
+                        <div class="bancos-card">
+                            <strong style="color:#0056b3;">INFORMACIÓN BANCARIA</strong><br>
+                            '. $datosBancariosHtml .'
+                            <br><br>
+                            <em>* Una vez realizado el pago, favor de enviar comprobante.</em>
+                        </div>
+                    </td>
+                    <td class="footer-right">
+                        <table class="totales-table">
+                            <tr><td class="lbl">Subtotal:</td><td class="num">$'. number_format($subtotalReal, 2) .'</td></tr>
+                            <tr><td class="lbl">IVA (16%):</td><td class="num">$'. number_format($iva, 2) .'</td></tr>
+                            <tr class="total-row"><td class="lbl">TOTAL:</td><td class="num">$'. number_format($total, 2) .'</td></tr>
+                        </table>
 
-        foreach ($itemsMO as $tarea) {
-            // IA: Mejorar texto (Ejecución costosa, pero necesaria solo la primera vez gracias al caché)
-            $descMejorada = $this->mejorarTextoConIA($tarea['descripcion']);
-            
-            $html .= '
-                    <tr>
-                        <td class="col-cant" style="width: 15%; font-size: 9px;">'. floatval($tarea['horas']) .' hrs est.</td>
-                        <td class="col-desc" style="width: 85%;">'. $descMejorada .'</td>
-                    </tr>';
-        }
-        $html .= '</tbody></table>
-
-            <div class="footer-grid">
-                <div class="footer-left">
-                    <div class="bancos-card">
-                        <strong style="color:#0056b3;">INFORMACIÓN BANCARIA PARA ANTICIPO</strong><br><br>
-                        '. $datosBancariosHtml .'
-                        <br><br>
-                        <em>* Una vez realizado el pago, favor de enviar comprobante vía WhatsApp.</em>
-                    </div>
-                </div>
-                <div class="footer-right">
-                    <table class="totales-table">
-                        <tr><td class="lbl">Materiales (Est.):</td><td class="num">$'. number_format($matCliente, 2) .'</td></tr>
-                        <tr><td class="lbl">Mano de Obra:</td><td class="num">$'. number_format($moCliente, 2) .'</td></tr>';
-        
-        if ($tieneDescuento) {
-            $html .= '<tr><td class="lbl" style="border-top:1px solid #eee;">Subtotal Lista:</td><td class="num" style="border-top:1px solid #eee;">$'. number_format($subtotalSinDescuento, 2) .'</td></tr>';
-            $html .= '<tr><td class="lbl" style="color:#28a745;">Descuento ('. floatval($h['descuento_pct']) .'%):</td><td class="num" style="color:#28a745;">-$'. number_format($descuentoMonto, 2) .'</td></tr>';
-        }
-
-        $html .= '
-                        <tr><td class="lbl" style="border-top:1px solid #eee; padding-top:5px;">Subtotal:</td><td class="num" style="border-top:1px solid #eee; padding-top:5px;">$'. number_format($subtotalReal, 2) .'</td></tr>
-                        <tr><td class="lbl">IVA (16%):</td><td class="num">$'. number_format($iva, 2) .'</td></tr>
-                        <tr><td class="lbl total-row">TOTAL NETO:</td><td class="num total-row">$'. number_format($total, 2) .'</td></tr>
-                    </table>
-                    
-                    <div style="text-align: right; margin-top: 15px;">
-                        <div class="anticipo-badge">ANTICIPO: $'. number_format($anticipo, 2) .'</div>
-                        <div style="font-size: 9px; margin-top: 5px; color: #666;">Resto contra entrega: $'. number_format($total - $anticipo, 2) .'</div>
-                    </div>
-                </div>
-            </div>
+                        <div style="text-align: right; margin-top: 15px;">
+                            <div class="anticipo-badge">ANTICIPO REQUERIDO: $'. number_format($anticipo, 2) .'</div>
+                        </div>
+                    </td>
+                </tr>
+            </table>
 
             <div class="legal-footer">
-                '. $empresaWeb .' | '. $empresaDir .' | Este documento es una propuesta comercial y tiene una vigencia limitada.
+                Vigencia de la cotización: 15 días. Precios sujetos a cambio sin previo aviso.
             </div>
         </body>
         </html>';
+        // --- FIN DE LA PLANTILLA ---
 
-        // --- C. RENDERIZADO Y GUARDADO (FUSIONADO) ---
-        
         $dompdf->loadHtml($html);
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
-        ob_clean(); // Limpieza de buffer vital para evitar errores en el PDF
         
-        // IA: Generar nombre (Ejecutado al final para guardar con nombre bonito)
         $nombreParteIA = $this->generarNombreArchivoIA($itemsMateriales, $h['cliente_nombre']);
-        $nombreFinal = "C{$h['id']}_{$nombreParteIA}.pdf";
+        $nombreFinal = "C{$idCotizacion}_{$nombreParteIA}.pdf";
         
-        // GUARDAMOS EN DISCO (Funcionalidad del Archivo 1 recuperada)
         $rutaGuardado = $dirPdfs . $nombreFinal;
         $output = $dompdf->output();
-        file_put_contents($rutaGuardado, $output);
 
-        // ENVIAMOS AL NAVEGADOR
-        $dompdf->stream($nombreFinal, ["Attachment" => false]);
+        if (file_put_contents($rutaGuardado, $output) === false) {
+            error_log("Error al guardar el PDF en: " . $rutaGuardado);
+            return null;
+        }
+
+        // Devolver la URL pública relativa
+        return 'pdfs/' . $nombreFinal;
+    }
+
+
+    // --- MÉTODO LEGACY: SIRVE EL PDF (AHORA DESDE CACHÉ O LO GENERA) ---
+    public function generarPdf(string $uuid): void {
+        $datos = $this->service->obtenerCotizacionPorUuid($uuid);
+        if (!$datos) {
+            http_response_code(404); echo "Cotización no encontrada"; return;
+        }
+
+        $idCotizacion = (int)$datos['header']['id'];
+        $dirPdfs = __DIR__ . '/../../public/pdfs/';
+
+        $archivosExistentes = glob($dirPdfs . "C{$idCotizacion}_*.pdf");
+
+        if (!empty($archivosExistentes)) {
+            $rutaArchivo = $archivosExistentes[0];
+        } else {
+            // Si no existe, lo genera y guarda
+            $urlRelativa = $this->generarYGuardarPdf($uuid);
+            if ($urlRelativa) {
+                $rutaArchivo = $dirPdfs . basename($urlRelativa);
+            } else {
+                http_response_code(500); echo "Error al generar el PDF."; return;
+            }
+        }
+
+        $nombreArchivo = basename($rutaArchivo);
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: inline; filename="' . $nombreArchivo . '"');
+        header('Content-Length: ' . filesize($rutaArchivo));
+        ob_clean();
+        flush();
+        readfile($rutaArchivo);
+    }
+
+    private function mejorarTextoConIA(string $textoOriginal): string {
+        if (strlen($textoOriginal) < 3 || empty($textoOriginal)) return $textoOriginal;
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . $this->apiKey;
+        $prompt = "Eres un ingeniero experto redactando presupuestos. Reescribe esta tarea para que suene técnica y formal sin ser demasiado exagerado, el objetivo final es un cliente común. NO uses la palabra 'suministro' si es solo mano de obra. Entrada: '$textoOriginal'. Salida (SOLO EL TEXTO):";
+        $data = ['contents' => [['parts' => [['text' => $prompt]]]], 'generationConfig' => ['temperature' => 0.3, 'maxOutputTokens' => 8000]];
+        try {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            $response = curl_exec($ch);
+            if ($response === false) { curl_close($ch); return $textoOriginal; }
+            curl_close($ch);
+            $json = json_decode($response, true);
+            return trim($json['candidates'][0]['content']['parts'][0]['text'] ?? $textoOriginal);
+        } catch (Exception $e) { return $textoOriginal; }
+    }
+
+    private function generarNombreArchivoIA(array $materiales, string $nombreCliente): string {
+        if (empty($materiales)) { return preg_replace('/[^A-Za-z0-9]/', '', $nombreCliente); }
+        $lista = ""; $i = 0;
+        foreach($materiales as $m) { $lista .= $m['nombre'] . ", "; $i++; if($i > 5) break; }
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . $this->apiKey;
+        $prompt = "Analiza esta lista de materiales: [$lista]. Genera un nombre de archivo CORTO (max 5 palabras) usando guiones bajos que describa el trabajo. Ejemplo: Instalacion_CCTV_Norte. NO incluyas .pdf. Responde SOLO el nombre.";
+        $data = ['contents' => [['parts' => [['text' => $prompt]]]], 'generationConfig' => ['temperature' => 0.5, 'maxOutputTokens' => 1000]];
+        try {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            $response = curl_exec($ch);
+            curl_close($ch);
+            $json = json_decode($response, true);
+            $nombreGenerado = $json['candidates'][0]['content']['parts'][0]['text'] ?? null;
+            if ($nombreGenerado) { return preg_replace('/[^A-Za-z0-9_]/', '', trim($nombreGenerado)); }
+            return "Proyecto_Electrico";
+        } catch (Exception $e) { return "Cotizacion_Generica"; }
     }
 }
 ?>
