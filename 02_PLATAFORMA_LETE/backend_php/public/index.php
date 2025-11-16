@@ -118,6 +118,12 @@ elseif ($uri === '/api/admin/auditoria-inventario' && $_SERVER['REQUEST_METHOD']
 
 // --- BLOQUE D: ADMINISTRACIÓN DE COTIZACIONES ---
 
+// RUTA NUEVA: Autorizar Cotización (RESTful)
+elseif (preg_match('/^\/api\/cotizaciones\/authorize\/(\d+)$/', $uri, $matches) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header("Content-Type: application/json; charset=UTF-8");
+    $controller = new CotizacionController();
+    $controller->authorize((int)$matches[1]);
+}
 // RUTA M: Listar Cotizaciones (Admin)
 elseif ($uri === '/api/admin/cotizaciones' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     header("Content-Type: application/json; charset=UTF-8");

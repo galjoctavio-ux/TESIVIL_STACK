@@ -398,5 +398,16 @@ class CotizacionController {
             http_response_code(500); echo json_encode(['error' => $e->getMessage()]);
         }
     }
+
+    public function authorize(int $id): void {
+        try {
+            $this->calculosService->actualizarEstadoCotizacion($id, 'autorizada');
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Cotización autorizada']);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Error interno: ' . $e->getMessage()]);
+        }
+    }
 }
 ?>
