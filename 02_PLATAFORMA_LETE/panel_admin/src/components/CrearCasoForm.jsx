@@ -245,9 +245,7 @@ function CrearCasoForm({ onClose, onCasoCreado }) {
             <label htmlFor="tipo_caso">Tipo de Caso</label>
             <select id="tipo_caso" name="tipo_caso" value={formData.tipo_caso} onChange={handleChange} required>
               <option value="alto_consumo">Alto Consumo</option>
-              <option value="revision_general">Revisión General</option>
-              <option value="reparacion">Reparación</option>
-              <option value="proyecto">Proyecto</option>
+              <option value="levantamiento">Levantamiento</option>
             </select>
           </div>
         </div>
