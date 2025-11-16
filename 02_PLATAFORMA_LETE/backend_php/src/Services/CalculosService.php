@@ -199,12 +199,11 @@ class CalculosService {
         ?int $versionPadreId = null,
         float $descuentoPct = 0.0
     ): string {
+        // Esta función ahora asume que una transacción ya ha sido iniciada si es necesario.
         try {
-            $this->db->beginTransaction();
             $uuid = bin2hex(random_bytes(16));
             $totales = $resultadoCalculo['totales'];
 
-            // 1. GUARDAR EN TABLA 'cotizaciones'
             $sqlHeader = "INSERT INTO cotizaciones 
                 (uuid, tecnico_id_externo, tecnico_nombre, cliente_nombre, cliente_email, direccion_obra,
                  horas_estimadas_tecnico,
@@ -225,33 +224,24 @@ class CalculosService {
 
             $cotizacionId = $this->db->lastInsertId();
 
-            // 2. GUARDAR ITEMS DE MATERIALES
             $stmtItem = $this->db->prepare("INSERT INTO cotizaciones_items (cotizacion_id, recurso_id, cantidad, precio_base_capturado, colchon_aplicado_pct, precio_con_colchon, desperdicio_aplicado_pct, costo_final_calculado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
             foreach ($resultadoCalculo['desglose_items'] as $item) {
                 $stmtItem->execute([
-                    $cotizacionId, 
-                    $item['id_recurso_ref'], 
-                    $item['cantidad'], 
-                    $item['precio_base_capturado'],
-                    $item['colchon_aplicado_pct'],
-                    $item['precio_con_colchon'],
-                    $item['desperdicio_aplicado_pct'],
-                    $item['costo_final_calculado']
+                    $cotizacionId, $item['id_recurso_ref'], $item['cantidad'], $item['precio_base_capturado'],
+                    $item['colchon_aplicado_pct'], $item['precio_con_colchon'], $item['desperdicio_aplicado_pct'], $item['costo_final_calculado']
                 ]);
             }
 
-            // 3. GUARDAR ITEMS DE MANO DE OBRA
             $stmtMO = $this->db->prepare("INSERT INTO cotizaciones_mano_de_obra (cotizacion_id, descripcion, horas) VALUES (?, ?, ?)");
             foreach ($resultadoCalculo['desglose_mo'] as $tarea) {
-                $stmtMO->execute([ $cotizacionId, $tarea['descripcion'], floatval($tarea['horas']) ]);
+                $stmtMO->execute([$cotizacionId, $tarea['descripcion'], floatval($tarea['horas'])]);
             }
 
-            $this->db->commit();
             return $uuid;
 
         } catch (Exception $e) {
-            $this->db->rollBack();
-            throw new Exception("Error al guardar: " . $e->getMessage());
+            // No hacemos rollback aquí, dejamos que el llamador lo maneje.
+            throw new Exception("Error durante el guardado de la cotización: " . $e->getMessage());
         }
     }
 
@@ -504,10 +494,8 @@ class CalculosService {
     }
 
     public function powerCloneCotizacion(int $idOriginal, array $nuevosItems, array $nuevaMO, string $clienteEmail, string $clienteNombre): array {
+        $this->db->beginTransaction();
         try {
-            $this->db->beginTransaction();
-
-            // 1. Obtener datos de la cotización original
             $stmtOriginal = $this->db->prepare("SELECT * FROM cotizaciones WHERE id = ?");
             $stmtOriginal->execute([$idOriginal]);
             $originalData = $stmtOriginal->fetch(PDO::FETCH_ASSOC);
@@ -516,20 +504,18 @@ class CalculosService {
                 throw new Exception("Cotización original no encontrada.");
             }
 
-            // 2. Recalcular con nuevos items y el descuento original
             $descuentoOriginal = floatval($originalData['descuento_pct'] ?? 0.0);
             $resultado = $this->calcularCotizacion($nuevosItems, $nuevaMO, $descuentoOriginal);
 
-            // 3. Guardar la nueva cotización como una nueva versión
             $uuid = $this->guardarCotizacion(
                 $resultado,
                 $originalData['tecnico_id_externo'],
                 $originalData['tecnico_nombre'],
                 ['email' => $clienteEmail, 'nombre' => $clienteNombre, 'direccion' => ''],
                 'ENVIADA',
-                null,           // razonDetencion
-                null,           // estimacionIA
-                $idOriginal,    // versionPadreId
+                null,
+                null,
+                $idOriginal,
                 $descuentoOriginal
             );
 

@@ -9,10 +9,13 @@ require_once __DIR__ . '/PdfController.php'; // Incluimos el controlador de PDF
 class CotizacionController {
     private CalculosService $calculosService;
     private GeminiService $geminiService;
+    private PDO $db;
 
     public function __construct() {
         $this->calculosService = new CalculosService();
         $this->geminiService = new GeminiService();
+        $database = new Database();
+        $this->db = $database->getConnection();
     }
 
     // 2. GUARDAR Y ENVIAR
@@ -32,108 +35,63 @@ class CotizacionController {
             return;
         }
 
+        $this->db->beginTransaction();
         try {
-            // A. Cálculo Matemático
-            $resultado = $this->calculosService->calcularCotizacion(
-                $input['items'],
-                $input['mano_de_obra']
-            );
+            $resultado = $this->calculosService->calcularCotizacion($input['items'], $input['mano_de_obra']);
             $totales = $resultado['totales'];
 
-            // B. Estimación IA
-            $itemsSimples = array_map(function($item) {
-                return ['nombre' => $item['nombre'], 'cantidad' => $item['cantidad']];
-            }, $resultado['desglose_items']);
-
+            $itemsSimples = array_map(fn($item) => ['nombre' => $item['nombre'], 'cantidad' => $item['cantidad']], $resultado['desglose_items']);
             $estimacionIA = 0.0;
             try {
-                $estimacionIA = $this->geminiService->estimarCostoProyecto(
-                    $itemsSimples, 
-                    floatval($totales['horas_totales_calculadas'])
-                );
+                $estimacionIA = $this->geminiService->estimarCostoProyecto($itemsSimples, floatval($totales['horas_totales_calculadas']));
             } catch (Exception $e) {
-                error_log("Warning: La auditoría de IA falló, pero continuamos. " . $e->getMessage());
+                error_log("Warning: IA audit failed but we continue. " . $e->getMessage());
             }
 
-            // C. Filtro de Seguridad
             $reglas = $this->calculosService->validarReglasFinancieras($totales);
             $estado = 'ENVIADA';
             $razonDetencion = null;
-
             if (!$reglas['aprobado']) {
                 $estado = 'PENDIENTE_AUTORIZACION';
                 $razonDetencion = "REGLAS NEGOCIO: " . $reglas['razones'];
-            }
-            elseif ($estimacionIA > 0 && $totales['total_venta'] < ($estimacionIA * 0.60)) {
+            } elseif ($estimacionIA > 0 && $totales['total_venta'] < ($estimacionIA * 0.60)) {
                 $estado = 'PENDIENTE_AUTORIZACION';
                 $razonDetencion = "ALERTA IA: Precio muy bajo. (IA: $" . number_format($estimacionIA, 2) . " vs Técnico: $" . number_format($totales['total_venta'], 2) . ")";
             }
 
-            // D. Guardado en Base de Datos
-            // Si el nombre del cliente viene vacío, asignamos "Público en General".
-            $clienteNombre = (!empty(trim($input['cliente_nombre']))) ? trim($input['cliente_nombre']) : 'Público en General';
-            $clienteData = [
-                'nombre' => $clienteNombre,
-                'direccion' => $input['cliente_direccion'] ?? '',
-                'email' => $input['cliente_email']
-            ];
+            $clienteNombre = trim($input['cliente_nombre']) ?: 'Público en General';
+            $clienteData = ['nombre' => $clienteNombre, 'direccion' => $input['cliente_direccion'] ?? '', 'email' => $input['cliente_email']];
 
-            // Obtenemos el nombre real del asesor desde la BD usando el nuevo método.
             $nombreAsesorDesdeBD = $this->calculosService->obtenerNombreUsuarioPorId($input['tecnico_id']);
-
-            // Prioridad para el nombre del asesor: 1) Nombre desde BD, 2) Nombre enviado por el frontend, 3) Un genérico.
             $tecnicoNombreFinal = $nombreAsesorDesdeBD ?? $input['tecnico_nombre'] ?? 'Asesor de Servicio';
 
-            $uuid = $this->calculosService->guardarCotizacion(
-                $resultado, 
-                $input['tecnico_id'], 
-                $tecnicoNombreFinal,
-                $clienteData,
-                $estado,
-                $razonDetencion,
-                $estimacionIA,
-                null
-            );
+            $uuid = $this->calculosService->guardarCotizacion($resultado, $input['tecnico_id'], $tecnicoNombreFinal, $clienteData, $estado, $razonDetencion, $estimacionIA, null);
 
-            // --- INICIO DE LA NUEVA LÓGICA DE GENERACIÓN DE PDF ---
             $pdfUrl = null;
             if ($uuid) {
-                try {
-                    $pdfController = new PdfController();
-                    $pdfUrl = $pdfController->generarYGuardarPdf($uuid);
-
-                    if ($pdfUrl) {
-                        // Guardamos la URL en la base de datos
-                        $this->calculosService->actualizarUrlPdf($uuid, $pdfUrl);
-                    } else {
-                        error_log("Error: No se pudo generar o guardar el PDF para el UUID: " . $uuid);
-                    }
-                } catch (Exception $e) {
-                    error_log("Excepción al generar PDF: " . $e->getMessage());
+                $pdfController = new PdfController();
+                $pdfUrl = $pdfController->generarYGuardarPdf($uuid);
+                if ($pdfUrl) {
+                    $this->calculosService->actualizarUrlPdf($uuid, $pdfUrl);
+                } else {
+                    error_log("Error: Could not generate or save PDF for UUID: " . $uuid);
                 }
             }
-            // --- FIN DE LA NUEVA LÓGICA ---
 
-            // E. Acciones Post-Guardado
-            $mensajeRespuesta = "";
+            $this->db->commit();
+
             if ($estado === 'ENVIADA') {
                 $resendService = new ResendService();
-                // Asumimos que ResendService usará la pdf_url de la base de datos.
                 $resendService->enviarCotizacion($uuid, $input['cliente_email'], $clienteData['nombre']);
                 $mensajeRespuesta = 'Cotización enviada correctamente al cliente.';
             } else {
                 $mensajeRespuesta = '🛑 Cotización DETENIDA para revisión administrativa. Razón: ' . $razonDetencion;
             }
 
-            echo json_encode([
-                'status' => 'success',
-                'message' => $mensajeRespuesta,
-                'estado_final' => $estado,
-                'uuid' => $uuid,
-                'pdf_url' => $pdfUrl // Devolvemos la URL al frontend
-            ]);
+            echo json_encode(['status' => 'success', 'message' => $mensajeRespuesta, 'estado_final' => $estado, 'uuid' => $uuid, 'pdf_url' => $pdfUrl]);
 
         } catch (Exception $e) {
+            $this->db->rollBack();
             http_response_code(500);
             echo json_encode(['error' => 'Error: ' . $e->getMessage()]);
         }
