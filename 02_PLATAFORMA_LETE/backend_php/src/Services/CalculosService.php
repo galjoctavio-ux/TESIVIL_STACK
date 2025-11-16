@@ -589,5 +589,23 @@ class CalculosService {
             'config_sistema' => $this->config // Para mostrar porcentajes usados
         ];
     }
+
+    /**
+     * Actualiza la URL del PDF para una cotización específica usando su UUID.
+     * @param string $uuid El UUID de la cotización.
+     * @param string $pdfUrl La URL pública del PDF generado.
+     */
+    public function actualizarUrlPdf(string $uuid, string $pdfUrl): void {
+        try {
+            $sql = "UPDATE cotizaciones SET pdf_url = ? WHERE uuid = ?";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([$pdfUrl, $uuid]);
+        } catch (PDOException $e) {
+            // Log del error en lugar de detener la ejecución.
+            error_log("Error al actualizar la URL del PDF para UUID $uuid: " . $e->getMessage());
+            // Opcional: relanzar la excepción si se considera un fallo crítico.
+            // throw new Exception("No se pudo actualizar la URL del PDF.");
+        }
+    }
 }
 ?>
