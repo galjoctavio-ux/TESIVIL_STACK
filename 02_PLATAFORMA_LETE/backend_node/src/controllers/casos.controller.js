@@ -168,3 +168,81 @@ export const getCasoPublico = async (req, res) => {
     res.status(500).json({ message: 'Error al procesar el enlace.' });
   }
 };
+
+// --- NUEVO: Controlador para crear Caso y Cita desde Cotización ---
+export const createCasoFromCotizacion = async (req, res) => {
+  const {
+    cotizacionId,
+    tecnico_id,
+    fecha_inicio,
+    fecha_fin,
+    cliente_nombre,
+    cliente_direccion
+  } = req.body;
+
+  // Validación básica
+  if (!cotizacionId || !tecnico_id || !fecha_inicio || !fecha_fin || !cliente_nombre || !cliente_direccion) {
+    return res.status(400).json({ error: 'Faltan campos requeridos.' });
+  }
+
+  try {
+    // === PASO A: Crear Caso en Supabase ===
+    const { data: newCaso, error: casoError } = await supabaseAdmin
+      .from('casos')
+      .insert({
+        cliente_nombre,
+        cliente_direccion,
+        tecnico_id,
+        tipo: 'proyecto', // Asignar el tipo "proyecto"
+        status: 'asignado' // Asignar el status inicial
+      })
+      .select()
+      .single();
+
+    if (casoError) {
+      console.error('Error al crear el caso en Supabase:', casoError);
+      throw new Error('Error al crear el caso en Supabase.');
+    }
+
+    // === PASO B: Agendar en Easy!Appointments ===
+    const notas_estructuradas = JSON.stringify({
+      caso_id: newCaso.id,
+      cotizacion_id: cotizacionId
+    });
+
+    const eaQuery = `
+      INSERT INTO ea_appointments (id_users_provider, start_datetime, end_datetime, notes, notas_estructuradas)
+      VALUES (?, ?, ?, ?, ?);
+    `;
+
+    // Usamos el nombre del cliente en el campo 'notes' para referencia rápida en EA
+    const plainNotes = `Proyecto para: ${cliente_nombre}.`;
+
+    const [eaResult] = await eaPool.query(eaQuery, [
+      tecnico_id,
+      fecha_inicio,
+      fecha_fin,
+      plainNotes,
+      notas_estructuradas
+    ]);
+
+    if (eaResult.affectedRows === 0) {
+      // Este es un caso de fallo crítico. El caso se creó en Supabase pero no en EA.
+      // En un sistema real, aquí se debería implementar una lógica de compensación
+      // (ej: borrar el caso de Supabase o marcarlo como "error_agendamiento").
+      // Por ahora, solo informamos el error.
+      console.error('Error crítico: El caso se creó en Supabase pero falló el agendamiento en Easy!Appointments.');
+      return res.status(500).json({
+        error: 'El caso fue creado, pero la cita no pudo ser agendada. Por favor, revise manualmente.',
+        caso_creado: newCaso
+      });
+    }
+
+    // === PASO C: Éxito ===
+    res.status(201).json(newCaso);
+
+  } catch (error) {
+    console.error('Error en el proceso de creación desde cotización:', error);
+    res.status(500).json({ error: 'Error en el servidor al procesar la solicitud.', details: error.message });
+  }
+};

@@ -7,7 +7,8 @@ import {
   getCasos, 
   createCaso, 
   updateCaso, 
-  getCasoPublico // <-- AÑADIDO
+  getCasoPublico, // <-- AÑADIDO
+  createCasoFromCotizacion
 } from '../controllers/casos.controller.js';
 
 const router = Router();
@@ -33,5 +34,8 @@ router.post('/', requireAuth, isAdmin, createCaso);
 // PUT /lete/api/casos/:id (Admin: asignar técnico, cambiar status)
 // Solo para Admins
 router.put('/:id', requireAuth, isAdmin, updateCaso);
+
+// --- RUTA NUEVA PARA CREAR CASO Y CITA DESDE COTIZACIÓN ---
+router.post('/create-from-cotizacion', requireAuth, isAdmin, createCasoFromCotizacion);
 
 export default router;
