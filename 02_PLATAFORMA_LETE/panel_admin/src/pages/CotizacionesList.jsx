@@ -13,6 +13,7 @@ import {
 import DetalleCotizacionModal from '../components/DetalleCotizacionModal';
 import CierreProyectoModal from '../components/CierreProyectoModal';
 import PowerCloneModal from '../components/PowerCloneModal';
+import AutorizarCotizacionModal from '../components/AutorizarCotizacionModal';
 
 const CotizacionesList = () => {
   const [cotizaciones, setCotizaciones] = useState([]);
@@ -23,6 +24,7 @@ const CotizacionesList = () => {
   const [cotizacionEnRevision, setCotizacionEnRevision] = useState(null);
   const [cotizacionACerrar, setCotizacionACerrar] = useState(null);
   const [cotizacionAClonar, setCotizacionAClonar] = useState(null);
+  const [cotizacionAAutorizar, setCotizacionAAutorizar] = useState(null);
 
   useEffect(() => {
     cargarCotizaciones();
@@ -231,9 +233,14 @@ const CotizacionesList = () => {
 
                   {/* REVISAR (Pendientes) */}
                   {coti.estado === 'PENDIENTE_AUTORIZACION' && (
-                    <button onClick={() => setCotizacionEnRevision(coti)} title="Revisar Alerta" style={{ padding: '6px 8px', background: '#ffc107', color: 'black', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                      🔍
-                    </button>
+                    <>
+                      <button onClick={() => setCotizacionEnRevision(coti)} title="Revisar Alerta" style={{ padding: '6px 8px', background: '#ffc107', color: 'black', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                        🔍
+                      </button>
+                      <button onClick={() => setCotizacionAAutorizar(coti)} title="Autorizar y Agendar" style={{ padding: '6px 8px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                        📅
+                      </button>
+                    </>
                   )}
 
                   {/* FINALIZAR / REENVIAR (Enviadas/Autorizadas) */}
@@ -272,6 +279,16 @@ const CotizacionesList = () => {
       {cotizacionEnRevision && <DetalleCotizacionModal cotizacion={cotizacionEnRevision} onClose={() => setCotizacionEnRevision(null)} onAutorizar={handleAutorizar} onRechazar={handleRechazar} />}
       {cotizacionACerrar && <CierreProyectoModal cotizacion={cotizacionACerrar} onClose={() => setCotizacionACerrar(null)} onFinalizar={handleFinalizar} />}
       {cotizacionAClonar && <PowerCloneModal cotizacionId={cotizacionAClonar} onClose={() => setCotizacionAClonar(null)} onCloned={handleCloned} />}
+      {cotizacionAAutorizar && (
+        <AutorizarCotizacionModal
+          cotizacion={cotizacionAAutorizar}
+          onClose={() => setCotizacionAAutorizar(null)}
+          onConfirm={() => {
+            setCotizacionAAutorizar(null);
+            cargarCotizaciones();
+          }}
+        />
+      )}
     </div>
   );
 };
