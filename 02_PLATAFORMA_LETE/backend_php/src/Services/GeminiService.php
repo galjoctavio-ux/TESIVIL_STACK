@@ -1,13 +1,16 @@
 <?php
 declare(strict_types=1);
 
+// Incluir el bootstrap para cargar las variables de entorno
+require_once __DIR__ . '/../../config/bootstrap.php';
+
 class GeminiService {
     private string $apiKey;
     private string $apiUrl;
 
     public function __construct() {
-        // Mantén tu API Key aquí (en el futuro la moveremos a la BD)
-        $this->apiKey = 'AIzaSyCgkr08EEaYfolg8H9AIrep3y_vn3V0Kz8'; 
+        // Leer la API Key desde las variables de entorno
+        $this->apiKey = $_ENV['GEMINI_API_KEY'];
         $this->apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . $this->apiKey;
     }
 
@@ -59,7 +62,7 @@ No expliques nada, solo dame el número.";
 
         try {
             $respuesta = $this->llamarGemini($prompt, 0.2); // Temperatura baja para ser más preciso/matemático
-            
+
             // Limpiamos la respuesta para obtener solo el número
             $numeroLimpio = preg_replace('/[^0-9.]/', '', $respuesta);
             return floatval($numeroLimpio);
@@ -87,7 +90,7 @@ No expliques nada, solo dame el número.";
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);

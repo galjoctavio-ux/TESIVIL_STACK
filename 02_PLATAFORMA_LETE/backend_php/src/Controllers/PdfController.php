@@ -10,10 +10,15 @@ use Dompdf\Options;
 class PdfController {
     private CalculosService $service;
     private GeminiService $gemini;
-    // API Key configurada
-    private string $apiKey = 'AIzaSyCgkr08EEaYfolg8H9AIrep3y_vn3V0Kz8'; 
+    private string $apiKey;
 
     public function __construct() {
+        // Incluir el bootstrap para cargar las variables de entorno
+        require_once __DIR__ . '/../../config/bootstrap.php';
+        if (!isset($_ENV['GEMINI_API_KEY'])) {
+            throw new \Exception("Error: La variable de entorno GEMINI_API_KEY no está configurada.");
+        }
+        $this->apiKey = $_ENV['GEMINI_API_KEY'];
         $this->service = new CalculosService();
         $this->gemini = new GeminiService();
     }
