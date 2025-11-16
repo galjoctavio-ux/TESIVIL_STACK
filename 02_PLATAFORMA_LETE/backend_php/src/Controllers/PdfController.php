@@ -89,14 +89,33 @@ class PdfController {
         $options->set('isRemoteEnabled', true); 
         $dompdf = new Dompdf($options);
 
+        // --- Nivel 2: Generar Resumen con IA ---
+        $resumenIA = '';
+        try {
+            $resumenIA = $this->gemini->generarResumenObjetivo($datos);
+        } catch (Exception $e) {
+            error_log("Fallo en la llamada a GeminiService para resumen: " . $e->getMessage());
+            // El PDF se generará sin el resumen, no es crítico.
+        }
+        $resumenIAHtml = !empty($resumenIA) ? '<p style="text-align: justify; padding: 0 5px 15px 5px; font-style: italic; color: #555;">' . htmlspecialchars($resumenIA) . '</p>' : '';
+
+
         // --- INICIO DE LA PLANTILLA HTML REDISEÑADA ---
         $html = '
         <html>
         <head>
             <meta charset="UTF-8">
             <style>
+                /* Importar fuente moderna */
+                @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+
                 @page { margin: 25px; }
-                body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 11px; color: #343a40; line-height: 1.5; }
+                body {
+                    font-family: 'Roboto', sans-serif;
+                    color: #444;
+                    font-size: 12px;
+                    line-height: 1.5;
+                }
                 .header-table { width: 100%; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 25px; }
                 .logo-img { max-width: 180px; max-height: 60px; }
                 .empresa-info { text-align: right; font-size: 10px; color: #6c757d; }
@@ -108,11 +127,37 @@ class PdfController {
 
                 .section-header { background-color: #0056b3; color: white; padding: 8px 12px; font-weight: bold; font-size: 12px; margin-top: 20px; border-radius: 4px 4px 0 0; }
                 
-                .items-table { width: 100%; border-collapse: collapse; border: 1px solid #dee2e6; }
-                .items-table th { background-color: #f8f9fa; padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; font-size:10px; text-transform:uppercase; color: #495057; }
-                .items-table td { border-bottom: 1px solid #dee2e6; padding: 9px 10px; vertical-align: top; }
+                /* Tablas con espaciado profesional */
+                .items-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                    margin-bottom: 20px;
+                }
+
+                .items-table td {
+                    padding: 12px 15px; /* Más espacio vertical y horizontal */
+                    border-bottom: 1px solid #f0f0f0; /* Borde muy sutil */
+                    vertical-align: top;
+                }
+
+                /* Encabezados de tabla limpios y corporativos */
+                .items-table th {
+                    background-color: #f8f9fa; /* Gris muy claro */
+                    color: #0056b3; /* Azul corporativo */
+                    text-transform: uppercase;
+                    font-size: 9px;
+                    letter-spacing: 1px;
+                    padding: 10px 15px;
+                    text-align: left;
+                }
+
+                /* Efecto cebra para facilitar lectura */
+                .items-table tr:nth-child(even) {
+                    background-color: #fbfbfb;
+                }
                 .items-table tr:last-child td { border-bottom: none; }
-                .items-table tr:nth-child(even) td { background-color: #f8f9fa; }
+
 
                 .col-cant { width: 12%; text-align: center; }
                 .col-desc { width: 88%; }
@@ -130,6 +175,13 @@ class PdfController {
                 .anticipo-badge { background-color: #0056b3; color: white; padding: 6px 12px; border-radius: 15px; font-weight: bold; font-size: 11px; display: inline-block; }
                 
                 .legal-footer { position: fixed; bottom: -20px; left: 0; right: 0; text-align: center; font-size: 9px; color: #adb5bd; border-top: 1px solid #e9ecef; padding: 8px 0; background: white; }
+
+                /* Pie de página para términos */
+                .terms-footer {
+                    margin-top: 30px;
+                    font-size: 8px;
+                    color: #777;
+                }
             </style>
         </head>
         <body>
@@ -160,6 +212,9 @@ class PdfController {
                     </tr>
                 </table>
             </div>
+
+            <div class="section-header">Resumen del Proyecto</div>
+            '. $resumenIAHtml .'
 
             <div class="section-header">Conceptos del Proyecto</div>
             <table class="items-table">
@@ -207,6 +262,8 @@ class PdfController {
                     </td>
                     <td class="footer-right">
                         <table class="totales-table">
+                            <tr><td class="lbl">Costo de Materiales:</td><td class="num">$'. number_format($matCliente, 2) .'</td></tr>
+                            <tr><td class="lbl">Costo de Mano de Obra:</td><td class="num">$'. number_format($moCliente, 2) .'</td></tr>
                             <tr><td class="lbl">Subtotal:</td><td class="num">$'. number_format($subtotalReal, 2) .'</td></tr>
                             <tr><td class="lbl">IVA (16%):</td><td class="num">$'. number_format($iva, 2) .'</td></tr>
                             <tr class="total-row"><td class="lbl">TOTAL:</td><td class="num">$'. number_format($total, 2) .'</td></tr>
@@ -219,8 +276,13 @@ class PdfController {
                 </tr>
             </table>
 
-            <div class="legal-footer">
-                Vigencia de la cotización: 15 días. Precios sujetos a cambio sin previo aviso.
+            <div class="terms-footer">
+                <strong>Condiciones Comerciales:</strong><br>
+                1. La vigencia de esta cotización es de 15 días naturales.<br>
+                2. Los tiempos de entrega comenzarán a correr a partir de la recepción del anticipo.<br>
+                3. Cualquier trabajo extra no especificado en este documento se cotizará por separado.<br>
+                4. En caso de cancelaciones, solo se regresará una parte por gastos administrativos.<br>
+                5. Garantía de mano de obra: 90 días sobre vicios ocultos.
             </div>
         </body>
         </html>';

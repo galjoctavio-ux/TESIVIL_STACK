@@ -74,6 +74,46 @@ No expliques nada, solo dame el número.";
     }
 
     /**
+     * FUNCIÓN 3: Genera un resumen del objetivo del proyecto (¡NUEVA!)
+     * @param array $datosCotizacion Los datos completos de la cotización.
+     * @return string El resumen generado o una cadena vacía si falla.
+     */
+    public function generarResumenObjetivo(array $datosCotizacion): string {
+        if (empty($datosCotizacion['items_materiales']) && empty($datosCotizacion['items_mo'])) {
+            return '';
+        }
+
+        $listaMateriales = "";
+        foreach ($datosCotizacion['items_materiales'] as $item) {
+            $listaMateriales .= "- " . floatval($item['cantidad']) . " " . htmlspecialchars($item['unidad']) . " de " . htmlspecialchars($item['nombre']) . "\n";
+        }
+
+        $listaTareas = "";
+        foreach ($datosCotizacion['items_mo'] as $tarea) {
+            $listaTareas .= "- " . htmlspecialchars($tarea['descripcion']) . " (" . floatval($tarea['horas']) . " hrs)\n";
+        }
+
+        $prompt = "Eres un asistente de ingeniería para la empresa LETE. Tu tarea es redactar un resumen claro y conciso del objetivo de un proyecto para incluirlo en una cotización. El resumen debe seguir el formato: 'El objetivo de esta intervención es corregir [FALLA] en la [ZONA] para garantizar [BENEFICIO]'.
+
+Aquí están los detalles del trabajo:
+**Materiales a utilizar:**
+$listaMateriales
+
+**Tareas a realizar:**
+$listaTareas
+
+Basado en esta información, deduce la falla, la zona y el beneficio principal para el cliente. Responde únicamente con la frase del resumen, sin explicaciones ni texto adicional.";
+
+        try {
+            return $this->llamarGemini($prompt, 0.4);
+        } catch (Exception $e) {
+            error_log("Error en resumen de objetivo con Gemini: " . $e->getMessage());
+            return ''; // Devolver vacío si la IA falla
+        }
+    }
+
+
+    /**
      * Función auxiliar privada para hacer la llamada cURL (evita repetir código)
      */
     private function llamarGemini(string $prompt, float $temperature = 0.5): string {
