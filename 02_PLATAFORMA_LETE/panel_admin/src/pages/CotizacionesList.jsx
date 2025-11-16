@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  obtenerListadoCotizaciones, 
-  aplicarDescuento, 
-  autorizarCotizacion, 
+import {
+  obtenerListadoCotizaciones,
+  aplicarDescuento,
+  autorizarCotizacion,
   rechazarCotizacion,
   finalizarProyecto,
   clonarCotizacion,
@@ -16,7 +16,8 @@ const CotizacionesList = () => {
   const [cotizaciones, setCotizaciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mensaje, setMensaje] = useState('');
-  
+  const [searchTerm, setSearchTerm] = useState('');
+
   const [cotizacionEnRevision, setCotizacionEnRevision] = useState(null);
   const [cotizacionACerrar, setCotizacionACerrar] = useState(null);
 
@@ -130,7 +131,39 @@ const CotizacionesList = () => {
   };
 
   const formatCurrency = (num) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(num || 0);
-  const formatDate = (dateString) => new Date(dateString).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'});
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Fecha no disponible';
+    try {
+      const date = new Date(dateString);
+      // Fallback por si la fecha es inválida
+      if (isNaN(date.getTime())) {
+        return 'Fecha inválida';
+      }
+      return new Intl.DateTimeFormat('es-MX', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'America/Mexico_City',
+      }).format(date);
+    } catch (error) {
+      console.error("Error formatting date:", dateString, error);
+      return 'Fecha inválida';
+    }
+  };
+
+  const filteredCotizaciones = cotizaciones.filter(coti => {
+    const searchTermLower = searchTerm.toLowerCase();
+    const folio = coti.id.toString();
+    const cliente = coti.cliente_nombre.toLowerCase();
+    const asesor = (coti.asesor_nombre || coti.tecnico_nombre).toLowerCase();
+
+    return folio.includes(searchTermLower) ||
+           cliente.includes(searchTermLower) ||
+           asesor.includes(searchTermLower);
+  });
 
   return (
     <div style={{ padding: '20px' }}>
@@ -138,6 +171,14 @@ const CotizacionesList = () => {
         <h2>📊 Tablero de Cotizaciones</h2>
         <Link to="/dashboard" style={{ textDecoration: 'none', color: '#007bff' }}>&larr; Dashboard</Link>
       </div>
+
+      <input
+        type="text"
+        placeholder="🔍 Buscar cotización..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        style={{ width: '100%', padding: '10px', marginBottom: '20px', border: '1px solid #ccc', borderRadius: '4px' }}
+      />
 
       {mensaje && <div style={{ padding: '10px', marginBottom: '15px', background: '#d4edda', color: '#155724', borderRadius: '5px' }}>{mensaje}</div>}
 
@@ -148,6 +189,7 @@ const CotizacionesList = () => {
               <th style={{ padding: '12px' }}>Estado</th>
               <th style={{ padding: '12px' }}>Fecha</th>
               <th style={{ padding: '12px' }}>Cliente</th>
+              <th style={{ padding: '12px' }}>Asesor</th>
               <th style={{ padding: '12px' }}>Total Venta</th>
               <th style={{ padding: '12px', background:'#555', borderLeft:'1px solid #666' }}>Costo Mat.</th>
               <th style={{ padding: '12px' }}>Desc.</th>
@@ -156,16 +198,18 @@ const CotizacionesList = () => {
             </tr>
           </thead>
           <tbody>
-            {cotizaciones.map((coti) => (
+            {filteredCotizaciones.map((coti) => (
               <tr key={coti.id} style={{ borderBottom: '1px solid #eee', background: coti.estado === 'PENDIENTE_AUTORIZACION' ? '#fffdf0' : (coti.estado === 'COMPLETADA' ? '#f8f9fa' : 'white') }}>
                 <td style={{ padding: '12px' }}>{getStatusBadge(coti.estado)}</td>
                 <td style={{ padding: '12px' }}><small>{formatDate(coti.fecha_creacion)}</small></td>
                 <td style={{ padding: '12px' }}>
                     <div>{coti.cliente_nombre}</div>
-                    <small style={{color:'#888'}}>{coti.tecnico_nombre}</small>
+                </td>
+                <td style={{ padding: '12px' }}>
+                    <small style={{color:'#555'}}>{coti.asesor_nombre || coti.tecnico_nombre}</small>
                 </td>
                 <td style={{ padding: '12px', fontWeight: 'bold' }}>{formatCurrency(coti.precio_venta_final)}</td>
-                
+
                 <td style={{ padding: '12px', color:'#555', fontSize:'0.9em', borderLeft:'1px solid #eee' }}>
                     {formatCurrency(coti.total_materiales_cd)}
                 </td>
@@ -177,7 +221,7 @@ const CotizacionesList = () => {
                     {coti.estimacion_ia ? formatCurrency(coti.estimacion_ia) : '-'}
                 </td>
                 <td style={{ padding: '12px', display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                  
+
                   {/* REVISAR (Pendientes) */}
                   {coti.estado === 'PENDIENTE_AUTORIZACION' && (
                     <button onClick={() => setCotizacionEnRevision(coti)} title="Revisar Alerta" style={{ padding: '6px 8px', background: '#ffc107', color: 'black', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
