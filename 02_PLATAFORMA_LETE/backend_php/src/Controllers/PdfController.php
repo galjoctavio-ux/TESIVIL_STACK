@@ -100,89 +100,93 @@ class PdfController {
         $resumenIAHtml = !empty($resumenIA) ? '<p style="text-align: justify; padding: 0 5px 15px 5px; font-style: italic; color: #555;">' . htmlspecialchars($resumenIA) . '</p>' : '';
 
 
+        $estilosCss = <<<EOD
+        <style>
+            /* Importar fuente moderna */
+            @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+
+            @page { margin: 25px; }
+            body {
+                font-family: 'Roboto', sans-serif;
+                color: #444;
+                font-size: 12px;
+                line-height: 1.5;
+            }
+            .header-table { width: 100%; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 25px; }
+            .logo-img { max-width: 180px; max-height: 60px; }
+            .empresa-info { text-align: right; font-size: 10px; color: #6c757d; }
+            .empresa-info strong { font-size: 12px; color: #0056b3; }
+
+            .cliente-box { border: 1px solid #dee2e6; border-left: 5px solid #0056b3; padding: 15px; margin-bottom: 25px; border-radius: 4px; background-color: #f8f9fa; }
+            .cliente-label { font-weight: bold; color: #0056b3; font-size: 9px; text-transform: uppercase; margin-bottom: 4px; }
+            .cliente-dato { font-size: 12px; margin-bottom: 5px; }
+
+            .section-header { background-color: #0056b3; color: white; padding: 8px 12px; font-weight: bold; font-size: 12px; margin-top: 20px; border-radius: 4px 4px 0 0; }
+
+            /* Tablas con espaciado profesional */
+            .items-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 20px;
+                margin-bottom: 20px;
+            }
+
+            .items-table td {
+                padding: 12px 15px; /* Más espacio vertical y horizontal */
+                border-bottom: 1px solid #f0f0f0; /* Borde muy sutil */
+                vertical-align: top;
+            }
+
+            /* Encabezados de tabla limpios y corporativos */
+            .items-table th {
+                background-color: #f8f9fa; /* Gris muy claro */
+                color: #0056b3; /* Azul corporativo */
+                text-transform: uppercase;
+                font-size: 9px;
+                letter-spacing: 1px;
+                padding: 10px 15px;
+                text-align: left;
+            }
+
+            /* Efecto cebra para facilitar lectura */
+            .items-table tr:nth-child(even) {
+                background-color: #fbfbfb;
+            }
+            .items-table tr:last-child td { border-bottom: none; }
+
+
+            .col-cant { width: 12%; text-align: center; }
+            .col-desc { width: 88%; }
+
+            .footer-grid { width: 100%; margin-top: 30px; }
+            .footer-left { width: 58%; vertical-align: top; padding-right: 20px; }
+            .footer-right { width: 42%; vertical-align: top; }
+
+            .bancos-card { border: 1px solid #e9ecef; padding: 15px; border-radius: 4px; font-size: 10px; background: #f8f9fa; }
+            .totales-table { width: 100%; }
+            .totales-table td { padding: 6px 0; text-align: right; }
+            .lbl { color: #495057; }
+            .num { font-weight: bold; color: #212529; }
+            .total-row td { font-size: 16px; font-weight: bold; color: #0056b3; border-top: 2px solid #0056b3; padding-top: 10px !important; }
+            .anticipo-badge { background-color: #0056b3; color: white; padding: 6px 12px; border-radius: 15px; font-weight: bold; font-size: 11px; display: inline-block; }
+
+            .legal-footer { position: fixed; bottom: -20px; left: 0; right: 0; text-align: center; font-size: 9px; color: #adb5bd; border-top: 1px solid #e9ecef; padding: 8px 0; background: white; }
+
+            /* Pie de página para términos */
+            .terms-footer {
+                margin-top: 30px;
+                font-size: 8px;
+                color: #777;
+            }
+        </style>
+EOD;
+
         // --- INICIO DE LA PLANTILLA HTML REDISEÑADA ---
         $html = '
         <html>
         <head>
             <meta charset="UTF-8">
-            <style>
-                /* Importar fuente moderna */
-                @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
-
-                @page { margin: 25px; }
-                body {
-                    font-family: 'Roboto', sans-serif;
-                    color: #444;
-                    font-size: 12px;
-                    line-height: 1.5;
-                }
-                .header-table { width: 100%; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 25px; }
-                .logo-img { max-width: 180px; max-height: 60px; }
-                .empresa-info { text-align: right; font-size: 10px; color: #6c757d; }
-                .empresa-info strong { font-size: 12px; color: #0056b3; }
-                
-                .cliente-box { border: 1px solid #dee2e6; border-left: 5px solid #0056b3; padding: 15px; margin-bottom: 25px; border-radius: 4px; background-color: #f8f9fa; }
-                .cliente-label { font-weight: bold; color: #0056b3; font-size: 9px; text-transform: uppercase; margin-bottom: 4px; }
-                .cliente-dato { font-size: 12px; margin-bottom: 5px; }
-
-                .section-header { background-color: #0056b3; color: white; padding: 8px 12px; font-weight: bold; font-size: 12px; margin-top: 20px; border-radius: 4px 4px 0 0; }
-                
-                /* Tablas con espaciado profesional */
-                .items-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin-top: 20px;
-                    margin-bottom: 20px;
-                }
-
-                .items-table td {
-                    padding: 12px 15px; /* Más espacio vertical y horizontal */
-                    border-bottom: 1px solid #f0f0f0; /* Borde muy sutil */
-                    vertical-align: top;
-                }
-
-                /* Encabezados de tabla limpios y corporativos */
-                .items-table th {
-                    background-color: #f8f9fa; /* Gris muy claro */
-                    color: #0056b3; /* Azul corporativo */
-                    text-transform: uppercase;
-                    font-size: 9px;
-                    letter-spacing: 1px;
-                    padding: 10px 15px;
-                    text-align: left;
-                }
-
-                /* Efecto cebra para facilitar lectura */
-                .items-table tr:nth-child(even) {
-                    background-color: #fbfbfb;
-                }
-                .items-table tr:last-child td { border-bottom: none; }
-
-
-                .col-cant { width: 12%; text-align: center; }
-                .col-desc { width: 88%; }
-                
-                .footer-grid { width: 100%; margin-top: 30px; }
-                .footer-left { width: 58%; vertical-align: top; padding-right: 20px; }
-                .footer-right { width: 42%; vertical-align: top; }
-                
-                .bancos-card { border: 1px solid #e9ecef; padding: 15px; border-radius: 4px; font-size: 10px; background: #f8f9fa; }
-                .totales-table { width: 100%; }
-                .totales-table td { padding: 6px 0; text-align: right; }
-                .lbl { color: #495057; }
-                .num { font-weight: bold; color: #212529; }
-                .total-row td { font-size: 16px; font-weight: bold; color: #0056b3; border-top: 2px solid #0056b3; padding-top: 10px !important; }
-                .anticipo-badge { background-color: #0056b3; color: white; padding: 6px 12px; border-radius: 15px; font-weight: bold; font-size: 11px; display: inline-block; }
-                
-                .legal-footer { position: fixed; bottom: -20px; left: 0; right: 0; text-align: center; font-size: 9px; color: #adb5bd; border-top: 1px solid #e9ecef; padding: 8px 0; background: white; }
-
-                /* Pie de página para términos */
-                .terms-footer {
-                    margin-top: 30px;
-                    font-size: 8px;
-                    color: #777;
-                }
-            </style>
+            ' . $estilosCss . '
         </head>
         <body>
             <table class="header-table">
