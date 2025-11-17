@@ -56,3 +56,50 @@ export const checkAvailability = async (req, res) => {
     });
   }
 };
+
+/**
+ * Obtiene todas las citas de un técnico para un día específico.
+ */
+export const getAgendaPorDia = async (req, res) => {
+  const tecnico_id = req.user.id; // ID del técnico inyectado por requireAuth
+  const { fecha } = req.query; // Fecha en formato 'YYYY-MM-DD'
+
+  if (!fecha) {
+    return res.status(400).json({
+      error: 'El parámetro "fecha" es requerido.',
+    });
+  }
+
+  try {
+    const connection = await pool.getConnection();
+
+    // La query busca todas las citas para el proveedor y la fecha especificada.
+    // Hacemos un LEFT JOIN con ea_appointments_cases para obtener el caso_id si existe.
+    const sql = `
+      SELECT
+        a.id,
+        a.start_datetime,
+        a.end_datetime,
+        ac.caso_id
+      FROM ea_appointments a
+      LEFT JOIN ea_appointments_cases ac ON a.id = ac.appointment_id
+      WHERE a.id_users_provider = ?
+        AND DATE(a.start_datetime) = ?
+      ORDER BY a.start_datetime ASC;
+    `;
+
+    const params = [tecnico_id, fecha];
+
+    const [rows] = await connection.execute(sql, params);
+    connection.release();
+
+    res.json(rows);
+
+  } catch (error) {
+    console.error('Error al obtener la agenda por día:', error);
+    res.status(500).json({
+      error: 'Error interno del servidor al obtener la agenda.',
+      details: error.message
+    });
+  }
+};
