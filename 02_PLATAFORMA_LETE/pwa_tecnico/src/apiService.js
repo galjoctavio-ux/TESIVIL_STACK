@@ -22,6 +22,28 @@ api.interceptors.response.use(
 
 export default api;
 
+/**
+ * ¡FUNCIÓN FALTANTE!
+ * Obtiene el catálogo público de recursos desde el backend PHP
+ */
+export const obtenerRecursos = async () => {
+  try {
+    // Usamos fetch para llamar al backend de PHP, igual que en el panel de admin
+    const response = await fetch(`/api/recursos`);
+
+    if (!response.ok) {
+        throw new Error(`Error de red: ${response.status}`);
+    }
+
+    return await response.json(); // Devuelve { status: 'success', data: [...] }
+
+  } catch (error) {
+    console.error('Error en obtenerRecursos:', error);
+    // Relanzamos el error para que el componente (Cotizador.jsx) pueda atraparlo
+    throw error;
+  }
+};
+
 // =========================================================
 // 2. NUEVO: Integración con Microservicio PHP (Cotizador)
 // =========================================================

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import api, { guardarCotizacion, crearRecursoTecnico, obtenerSugerenciasIA } from '../apiService';
+import api, { guardarCotizacion, crearRecursoTecnico, obtenerSugerenciasIA, obtenerRecursos } from '../apiService';
 
 // --- Componente ModalCrear (Con arreglos visuales) ---
 const ModalCrear = ({ alCerrar, alGuardar }) => {
@@ -94,9 +94,10 @@ const Cotizador = () => {
   useEffect(() => {
     const fetchRecursos = async () => {
       try {
-        const res = await api.get('/api/recursos');
-        if (res.data.status === 'success') {
-          setCatalogo(res.data.data);
+        const res = await obtenerRecursos(); // <-- ¡CORRECTO!
+
+        if (res.status === 'success') { // La respuesta de fetch ya viene como JSON
+          setCatalogo(res.data);
         } else {
           setError("Error al cargar el catálogo de recursos.");
         }
