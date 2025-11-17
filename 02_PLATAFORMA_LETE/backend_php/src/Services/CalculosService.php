@@ -287,14 +287,15 @@ class CalculosService {
         return ['id' => (int)$this->db->lastInsertId(), 'nombre' => $nombre, 'unidad' => $unidad, 'precio_costo_base' => $precio, 'tipo' => 'MATERIAL'];
     }
 
-    public function actualizarRecurso(int $id, string $nombre, float $precio, int $tiempo): void {
+    public function actualizarRecurso(int $id, string $nombre, float $precio, int $tiempo, string $unidad): void {
         $sql = "UPDATE recursos 
                 SET nombre = ?, 
                     precio_costo_base = ?, 
-                    tiempo_instalacion_min = ?, 
+                    tiempo_instalacion_min = ?,
+                    unidad = ?,
                     fecha_actualizacion_costo = NOW() 
                 WHERE id = ?";
-        $this->db->prepare($sql)->execute([$nombre, $precio, $tiempo, $id]);
+        $this->db->prepare($sql)->execute([$nombre, $precio, $tiempo, $unidad, $id]);
     }
 
     public function eliminarRecurso(int $id): void {

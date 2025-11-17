@@ -63,11 +63,13 @@ const GestionMateriales = () => {
     const nombre = document.getElementById(`nombre-${id}`).value;
     const precio = document.getElementById(`precio-${id}`).value;
     const tiempo = document.getElementById(`tiempo-${id}`).value;
+    const unidad = document.getElementById(`unidad-${id}`).value; // Añadido
 
     await updateRecurso(id, {
         nombre: nombre,
         precio: parseFloat(precio),
-        tiempo: parseInt(tiempo)
+        tiempo: parseInt(tiempo),
+        unidad: unidad // Añadido
     });
     setEditando(null);
     cargar();
@@ -106,6 +108,7 @@ const GestionMateriales = () => {
           <tr style={{background: '#343a40', color: 'white', textAlign: 'left'}}>
             <th style={{padding: '10px'}}>Estatus</th>
             <th>Nombre</th>
+            <th>Unidad</th>
             <th>Precio Base</th>
             <th>Tiempo (Min)</th>
             <th>Acciones</th>
@@ -122,6 +125,9 @@ const GestionMateriales = () => {
               </td>
               <td>
                 {editando === r.id ? <input defaultValue={r.nombre} id={`nombre-${r.id}`} style={{width: '100%'}} /> : r.nombre}
+              </td>
+              <td>
+                {editando === r.id ? <input defaultValue={r.unidad || ''} id={`unidad-${r.id}`} style={{width: '60px'}} /> : r.unidad}
               </td>
               <td>
                 {editando === r.id ?

@@ -179,12 +179,12 @@ class CotizacionController {
     }
     public function editarRecurso(): void {
         $input = json_decode(file_get_contents('php://input'), true);
-        if (empty($input['id']) || empty($input['nombre']) || !isset($input['precio']) || !isset($input['tiempo'])) {
+        if (empty($input['id']) || empty($input['nombre']) || !isset($input['precio']) || !isset($input['tiempo']) || empty($input['unidad'])) { // Añadido unidad
             http_response_code(400);
             echo json_encode(['error' => 'Datos incompletos']); return;
         }
         try {
-            $this->calculosService->actualizarRecurso((int)$input['id'], $input['nombre'], floatval($input['precio']), (int)$input['tiempo']);
+            $this->calculosService->actualizarRecurso((int)$input['id'], $input['nombre'], floatval($input['precio']), (int)$input['tiempo'], $input['unidad']); // Añadido unidad
             echo json_encode(['status' => 'success', 'message' => 'Actualizado']);
         } catch (Exception $e) { /* ... */ }
     }
