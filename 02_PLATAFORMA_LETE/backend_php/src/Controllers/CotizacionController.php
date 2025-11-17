@@ -20,6 +20,9 @@ class CotizacionController {
 
     // 2. GUARDAR Y ENVIAR
     public function guardarCotizacion(): void {
+         // AUMENTAR EL TIEMPO LÍMITE DE EJECUCIÓN A 5 MINUTOS
+        set_time_limit(300);
+
         $inputJSON = file_get_contents('php://input');
         $input = json_decode($inputJSON, true);
 

@@ -443,13 +443,23 @@ const Cotizador = () => {
         {error && <div style={{ color: 'red', marginTop: '10px', textAlign: 'center', fontWeight: 'bold' }}>{error}</div>}
 
         <div style={{ marginTop: '30px' }}>
-          <button
-            onClick={handleEnviar}
-            disabled={enviando}
-            style={{ width: '100%', padding: '15px', background: enviando ? '#6c757d' : '#28a745', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', opacity: enviando ? 0.6 : 1 }}
-          >
-            {enviando ? 'Enviando...' : '➡️ Generar Cotización'}
-          </button>
+          {enviando ? (
+            <div className="spinner-container">
+              <div className="spinner"></div>
+              <p><strong>Procesando cotización...</strong></p>
+              <p style={{ fontSize: '0.9em', color: '#666' }}>
+                Esto puede tardar hasta 2 minutos mientras la IA audita los costos. No cierres esta ventana.
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={handleEnviar}
+              disabled={enviando}
+              style={{ width: '100%', padding: '15px', background: '#28a745', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold' }}
+            >
+              ➡️ Generar Cotización
+            </button>
+          )}
         </div>
       </div>
     </>
