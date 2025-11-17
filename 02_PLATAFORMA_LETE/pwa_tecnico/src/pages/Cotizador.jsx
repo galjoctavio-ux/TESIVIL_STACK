@@ -244,7 +244,8 @@ const Cotizador = () => {
       if (data.status === 'success') {
         if (casoId) {
             try {
-              await api.patch(`/casos/${casoId}`, { status: 'completado' });
+              // Llamada a la nueva ruta segura
+              await api.patch(`/casos/completar/${casoId}`);
             } catch (patchError) {
               console.error("Error al actualizar el caso a completado:", patchError);
               // Opcional: informar al usuario que la cotización se creó pero el caso no se actualizó.

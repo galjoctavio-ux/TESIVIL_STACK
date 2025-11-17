@@ -100,7 +100,8 @@ function CasosList() {
             filteredCasos.map(caso => {
               const cardClassName = `card ${
                 caso.tipo === 'alto_consumo' ? 'card-amarillo' :
-                caso.tipo === 'proyecto' ? 'card-azul' : ''
+                caso.tipo === 'proyecto' ? 'card-azul' :
+                caso.tipo === 'levantamiento' ? 'card-morado' : ''
               }`;
               return (
               <div key={caso.id} className={cardClassName}>
@@ -123,19 +124,21 @@ function CasosList() {
                   >
                     📍 Mapa
                   </button>
-                  <Link to={`/revision/${caso.id}`} style={{ textDecoration: 'none', flex: 1, display: 'flex' }}>
-                    <button
-                      style={{
-                        ...actionButtonStyles,
-                        backgroundColor: caso.status === 'completado' ? '#D1D5DB' : '#10B981',
-                        color: 'white',
-                        width: '100%'
-                      }}
-                      disabled={caso.status === 'completado'}
-                    >
-                      {caso.status === 'completado' ? 'Completado' : '📝 Revisar'}
-                    </button>
-                  </Link>
+                  {caso.tipo !== 'levantamiento' && (
+                    <Link to={`/revision/${caso.id}`} style={{ textDecoration: 'none', flex: 1, display: 'flex' }}>
+                      <button
+                        style={{
+                          ...actionButtonStyles,
+                          backgroundColor: caso.status === 'completado' ? '#D1D5DB' : '#10B981',
+                          color: 'white',
+                          width: '100%'
+                        }}
+                        disabled={caso.status === 'completado'}
+                      >
+                        {caso.status === 'completado' ? 'Completado' : '📝 Revisar'}
+                      </button>
+                    </Link>
+                  )}
                 </div>
 
                 {/* ======================================================= */}

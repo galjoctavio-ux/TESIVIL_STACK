@@ -19,3 +19,8 @@
 .card-azul {
   border-left: 5px solid #3B82F6;
 }
+
+.card-morado {
+  background-color: #f3e8ff;
+  border-left: 5px solid #9333ea;
+}
