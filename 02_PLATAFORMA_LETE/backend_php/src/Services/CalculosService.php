@@ -321,7 +321,8 @@ class CalculosService {
                     razon_detencion,    -- <--- ¡Y ESTE!
                     estatus, 
                     estado, 
-                    fecha_creacion 
+                    fecha_creacion,
+                    direccion_obra
                 FROM cotizaciones 
                 ORDER BY fecha_creacion DESC";
                 

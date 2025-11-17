@@ -292,6 +292,7 @@ const CotizacionesList = () => {
               <th style={{ padding: '12px' }}>Estado</th>
               <th style={{ padding: '12px' }}>Fecha</th>
               <th style={{ padding: '12px' }}>Cliente</th>
+              <th style={{ padding: '12px' }}>Dirección</th>
               <th style={{ padding: '12px' }}>Asesor</th>
               <th style={{ padding: '12px' }}>Total Venta</th>
               <th style={{ padding: '12px', background:'#555', borderLeft:'1px solid #666' }}>Costo Mat.</th>
@@ -307,6 +308,9 @@ const CotizacionesList = () => {
                 <td style={{ padding: '12px' }}><small>{formatDate(coti.fecha_creacion)}</small></td>
                 <td style={{ padding: '12px' }}>
                     <div>{coti.cliente_nombre}</div>
+                </td>
+                <td style={{ padding: '12px' }}>
+                    <div>{coti.direccion_obra}</div>
                 </td>
                 <td style={{ padding: '12px' }}>
                     <small style={{color:'#555'}}>{coti.asesor_nombre || coti.tecnico_nombre}</small>
