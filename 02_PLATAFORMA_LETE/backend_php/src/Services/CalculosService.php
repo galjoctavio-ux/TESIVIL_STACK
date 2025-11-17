@@ -196,7 +196,7 @@ class CalculosService {
         string $estado = 'ENVIADA',
         ?string $razonDetencion = null,
         ?float $estimacionIA = null,
-        ?int $versionPadreId = null,
+        ?int $caso_id = null,
         float $descuentoPct = 0.0
     ): string {
         // Esta función ahora asume que una transacción ya ha sido iniciada si es necesario.
@@ -205,21 +205,21 @@ class CalculosService {
             $totales = $resultadoCalculo['totales'];
 
             $sqlHeader = "INSERT INTO cotizaciones 
-                (uuid, tecnico_id_externo, tecnico_nombre, cliente_nombre, cliente_email, direccion_obra,
+                (uuid, tecnico_id_externo, tecnico_nombre, cliente_nombre, cliente_email, cliente_telefono, direccion_obra,
                  horas_estimadas_tecnico,
                  total_materiales_cd, total_mano_obra_cd, 
                  subtotal_venta, monto_iva, precio_venta_final, monto_anticipo, 
-                 descuento_pct, estado, razon_detencion, estimacion_ia, version_padre_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                 descuento_pct, estado, razon_detencion, estimacion_ia, caso_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             
             $this->db->prepare($sqlHeader)->execute([
-                $uuid, $tecnicoId, $tecnicoNombre, $clienteData['nombre'], $clienteData['email'], $clienteData['direccion'],
+                $uuid, $tecnicoId, $tecnicoNombre, $clienteData['nombre'], $clienteData['email'], $clienteData['telefono'], $clienteData['direccion'],
                 $totales['horas_totales_calculadas'],
                 $totales['materiales_cd'], $totales['mano_obra_cd'],
                 $totales['subtotal'],
                 $totales['iva'], $totales['total_venta'], $totales['anticipo_sugerido'],
                 $descuentoPct,
-                $estado, $razonDetencion, $estimacionIA, $versionPadreId
+                $estado, $razonDetencion, $estimacionIA, $caso_id
             ]);
 
             $cotizacionId = $this->db->lastInsertId();

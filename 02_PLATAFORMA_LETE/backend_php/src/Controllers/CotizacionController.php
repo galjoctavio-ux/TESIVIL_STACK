@@ -63,7 +63,12 @@ class CotizacionController {
             }
 
             $clienteNombre = trim($input['cliente_nombre']) ?: 'Público en General';
-            $clienteData = ['nombre' => $clienteNombre, 'direccion' => $input['cliente_direccion'] ?? '', 'email' => $input['cliente_email']];
+            $clienteData = [
+                'nombre' => $clienteNombre,
+                'direccion' => $input['cliente_direccion'] ?? '',
+                'email' => $input['cliente_email'],
+                'telefono' => $input['cliente_telefono'] ?? null
+            ];
 
             $nombreAsesorDesdeBD = $this->calculosService->obtenerNombreUsuarioPorId($input['tecnico_id']);
             $tecnicoNombreFinal = $nombreAsesorDesdeBD ?? $input['tecnico_nombre'] ?? 'Asesor de Servicio';

@@ -207,7 +207,8 @@ function CasosList() {
                     state={{
                       casoId: caso.id,
                       clienteNombre: caso.cliente_nombre,
-                      clienteDireccion: caso.cliente_direccion
+                      clienteDireccion: caso.cliente_direccion,
+                      clienteTelefono: caso.cliente_telefono
                     }}
                     style={{ textDecoration: 'none', display: 'block', marginTop: '12px' }}
                   >

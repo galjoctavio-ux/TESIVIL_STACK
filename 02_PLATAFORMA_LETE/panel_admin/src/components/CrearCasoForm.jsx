@@ -46,7 +46,7 @@ function CrearCasoForm({ onClose, onCasoCreado }) {
     tecnico_id_supabase: '',
     fecha: '',
     cliente_nombre: '',
-    // (cliente_telefono quitado)
+    cliente_telefono: '',
     tipo_caso: 'alto_consumo',
     direccion_legible: '',
     link_gmaps: '',
@@ -158,12 +158,11 @@ function CrearCasoForm({ onClose, onCasoCreado }) {
     // --- DEBUG: Añadido para ver qué falta ---
     console.log('Datos del formulario al guardar:', formData);
     
-    // --- MEJORA 1: Teléfono quitado de la validación ---
-    if (!formData.tecnico_id_ea || !formData.tecnico_id_supabase || !formData.fecha || !formData.hora || !formData.link_gmaps || !formData.cliente_nombre) {
-      setError('Por favor, complete todos los campos (Técnico, Fecha, Hora, Dirección y Nombre de Cliente).');
+    if (!formData.tecnico_id_ea || !formData.tecnico_id_supabase || !formData.fecha || !formData.hora || !formData.link_gmaps || !formData.cliente_nombre || !formData.cliente_telefono) {
+      setError('Por favor, complete todos los campos (Técnico, Fecha, Hora, Dirección, Nombre y Teléfono de Cliente).');
       // Imprimimos en consola qué campo falló
       for (const [key, value] of Object.entries(formData)) {
-        if (!value && ['tecnico_id_ea', 'tecnico_id_supabase', 'fecha', 'hora', 'link_gmaps', 'cliente_nombre'].includes(key)) {
+        if (!value && ['tecnico_id_ea', 'tecnico_id_supabase', 'fecha', 'hora', 'link_gmaps', 'cliente_nombre', 'cliente_telefono'].includes(key)) {
           console.error(`Error de validación: El campo ${key} está vacío.`);
         }
       }
@@ -240,7 +239,10 @@ function CrearCasoForm({ onClose, onCasoCreado }) {
             <label htmlFor="cliente_nombre">Nombre del Cliente</label>
             <input type="text" id="cliente_nombre" name="cliente_nombre" value={formData.cliente_nombre} onChange={handleChange} required />
           </div>
-          {/* --- MEJORA 1: Campo de Teléfono ELIMINADO --- */}
+          <div>
+            <label htmlFor="cliente_telefono">Teléfono Cliente</label>
+            <input type="tel" id="cliente_telefono" name="cliente_telefono" value={formData.cliente_telefono} onChange={handleChange} required />
+          </div>
           <div>
             <label htmlFor="tipo_caso">Tipo de Caso</label>
             <select id="tipo_caso" name="tipo_caso" value={formData.tipo_caso} onChange={handleChange} required>

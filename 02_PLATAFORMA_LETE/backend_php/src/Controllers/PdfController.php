@@ -296,8 +296,13 @@ EOD;
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
         
+        $telefonoSuffix = '';
+        if (!empty($h['cliente_telefono'])) {
+            $telefonoSuffix = '_' . substr(preg_replace('/[^0-9]/', '', $h['cliente_telefono']), -4);
+        }
+
         $nombreParteIA = $this->generarNombreArchivoIA($itemsMateriales, $h['cliente_nombre']);
-        $nombreFinal = "C{$idCotizacion}_{$nombreParteIA}.pdf";
+        $nombreFinal = "C{$idCotizacion}_{$nombreParteIA}{$telefonoSuffix}.pdf";
         
         $rutaGuardado = $dirPdfs . $nombreFinal;
         $output = $dompdf->output();

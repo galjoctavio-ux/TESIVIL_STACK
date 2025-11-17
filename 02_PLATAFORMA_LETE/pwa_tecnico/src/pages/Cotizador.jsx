@@ -67,6 +67,7 @@ const Cotizador = () => {
   const [clienteNombre, setClienteNombre] = useState('');
   const [clienteEmail, setClienteEmail] = useState('');
   const [clienteDireccion, setClienteDireccion] = useState('');
+  const [clienteTelefono, setClienteTelefono] = useState('');
 
   const [busqueda, setBusqueda] = useState('');
   const [sugerencias, setSugerencias] = useState([]);
@@ -89,7 +90,7 @@ const Cotizador = () => {
 
   useEffect(() => {
     if (location.state) {
-      const { casoId, clienteNombre, clienteDireccion } = location.state;
+      const { casoId, clienteNombre, clienteDireccion, clienteTelefono } = location.state;
       if (casoId) {
         setCasoId(casoId);
       }
@@ -98,6 +99,9 @@ const Cotizador = () => {
       }
       if (clienteDireccion) {
         setClienteDireccion(clienteDireccion);
+      }
+      if (clienteTelefono) {
+        setClienteTelefono(clienteTelefono);
       }
     }
   }, [location.state]);
@@ -241,6 +245,7 @@ const Cotizador = () => {
         cliente_nombre: clienteNombre,
         cliente_email: clienteEmail,
         cliente_direccion: clienteDireccion,
+        cliente_telefono: clienteTelefono,
         caso_id: casoId,
         items: itemsCarrito.map(i => ({ id_recurso: i.id_recurso, cantidad: i.cantidad })),
         mano_de_obra: moItems
@@ -349,6 +354,18 @@ const Cotizador = () => {
             />
           </div>
           {/* ======================================================= */}
+
+          <div style={{ marginBottom: '10px' }}>
+            <label style={{ display: 'block', fontSize: '0.9em', color: '#666' }}>Teléfono (Opcional)</label>
+            <input
+              type="text"
+              value={clienteTelefono}
+              onChange={(e) => setClienteTelefono(e.target.value)}
+              style={commonInputStyle}
+              placeholder="Teléfono del cliente"
+              disabled={!!casoId} // Deshabilitar si viene de un caso
+            />
+          </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '0.9em', color: '#D32F2F', fontWeight: 'bold' }}>Email del Cliente (Obligatorio)</label>
