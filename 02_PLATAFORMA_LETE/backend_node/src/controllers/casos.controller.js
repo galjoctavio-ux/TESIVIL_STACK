@@ -216,3 +216,43 @@ export const createCasoFromCotizacion = async (req, res) => {
     res.status(500).json({ error: 'Error en el servidor al procesar la solicitud.', details: error.message });
   }
 };
+
+export const completarCaso = async (req, res) => {
+  const { id: casoId } = req.params;
+  const { id: tecnicoId } = req.user; // ID del técnico autenticado
+
+  try {
+    // 1. Verificar que el caso existe y pertenece al técnico
+    const { data: caso, error: fetchError } = await supabaseAdmin
+      .from('casos')
+      .select('tecnico_id')
+      .eq('id', casoId)
+      .single();
+
+    if (fetchError || !caso) {
+      return res.status(404).json({ error: 'Caso no encontrado.' });
+    }
+
+    if (caso.tecnico_id !== tecnicoId) {
+      return res.status(403).json({ error: 'No tienes permiso para modificar este caso.' });
+    }
+
+    // 2. Actualizar el estado del caso a "completado"
+    const { data: updatedCaso, error: updateError } = await supabaseAdmin
+      .from('casos')
+      .update({ status: 'completado' })
+      .eq('id', casoId)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    res.status(200).json(updatedCaso);
+
+  } catch (error) {
+    console.error('Error al completar el caso:', error);
+    res.status(500).json({ error: 'Error interno al completar el caso.', details: error.message });
+  }
+};
