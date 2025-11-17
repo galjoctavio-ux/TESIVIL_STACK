@@ -280,11 +280,19 @@ class CalculosService {
         return $this->db->query($sql)->fetchAll();
     }
 
-    public function crearNuevoRecurso(string $nombre, string $unidad, float $precio, string $estatus = 'PENDIENTE_TECNICO'): array {
+    // --- FIRMA DE FUNCIÓN MODIFICADA ---
+    public function crearNuevoRecurso(string $nombre, string $unidad, float $precioTotal, string $estatus = 'PENDIENTE_TECNICO'): array {
+
+        // --- CÁLCULO DE IVA AÑADIDO ---
+        // Usamos la configuración de IVA que ya cargamos en el constructor
+        $ivaPct = $this->config['PCT_IVA'] ?? 16.0;
+        $precioBase = $precioTotal / (1 + ($ivaPct / 100));
+        // --- FIN CÁLCULO ---
+
         $sql = "INSERT INTO recursos (nombre, unidad, tipo, precio_costo_base, estatus) VALUES (?, ?, 'MATERIAL', ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$nombre, $unidad, $precio, $estatus]);
-        return ['id' => (int)$this->db->lastInsertId(), 'nombre' => $nombre, 'unidad' => $unidad, 'precio_costo_base' => $precio, 'tipo' => 'MATERIAL'];
+        $stmt->execute([$nombre, $unidad, $precioBase, $estatus]); // <-- Guardamos el precioBase calculado
+        return ['id' => (int)$this->db->lastInsertId(), 'nombre' => $nombre, 'unidad' => $unidad, 'precio_costo_base' => $precioBase, 'tipo' => 'MATERIAL'];
     }
 
     public function actualizarRecurso(int $id, string $nombre, float $precio, int $tiempo, string $unidad): void {

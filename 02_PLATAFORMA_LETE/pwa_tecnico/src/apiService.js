@@ -94,11 +94,12 @@ export const guardarCotizacion = async (data) => {
   }
 };
 
-export const crearRecursoTecnico = async (nombre, unidad, costo) => {
+export const crearRecursoTecnico = async (nombre, unidad, precioTotal) => { // <-- CAMBIADO
   const response = await fetch(`/api/recursos`, { // Asumimos que Nginx rutea /api/recursos (POST)
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nombre, unidad, costo })
+    // Enviamos 'precio_total' en lugar de 'costo'
+    body: JSON.stringify({ nombre, unidad, precio_total: precioTotal }) // <-- CAMBIADO
   });
   return await response.json();
 };

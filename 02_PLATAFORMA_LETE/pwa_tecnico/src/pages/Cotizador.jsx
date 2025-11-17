@@ -7,12 +7,13 @@ import api, { guardarCotizacion, crearRecursoTecnico, obtenerSugerenciasIA, obte
 const ModalCrear = ({ alCerrar, alGuardar }) => {
   const [nombre, setNombre] = useState('');
   const [unidad, setUnidad] = useState('');
-  const [costo, setCosto] = useState('');
+  const [precioTotal, setPrecioTotal] = useState(''); // <-- CAMBIADO
 
   const handleGuardar = async () => {
-    if (!nombre || !unidad || !costo) return alert("Completa todos los campos");
+    if (!nombre || !unidad || !precioTotal) return alert("Completa todos los campos"); // <-- CAMBIADO
     try {
-      const res = await crearRecursoTecnico(nombre, unidad, parseFloat(costo));
+      // Llamamos a la API con el precio total
+      const res = await crearRecursoTecnico(nombre, unidad, parseFloat(precioTotal)); // <-- CAMBIADO
       if (res.status === 'success') {
         alGuardar(res.data);
       } else {
@@ -37,7 +38,13 @@ const ModalCrear = ({ alCerrar, alGuardar }) => {
 
         <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre del Material" style={inputModalStyle} />
         <input type="text" value={unidad} onChange={e => setUnidad(e.target.value)} placeholder="Unidad (pza, m...)" style={inputModalStyle} />
-        <input type="number" value={costo} onChange={e => setCosto(e.target.value)} placeholder="Costo Aprox." style={inputModalStyle} />
+        <input
+          type="number"
+          value={precioTotal} // <-- CAMBIADO
+          onChange={e => setPrecioTotal(e.target.value)} // <-- CAMBIADO
+          placeholder="Precio Total (con IVA)" // <-- CAMBIADO
+          style={inputModalStyle}
+        />
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
           <button onClick={alCerrar} style={{ flex: 1, padding: '10px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '5px' }}>Cancelar</button>

@@ -137,15 +137,23 @@ class CotizacionController {
     }
     public function nuevoRecurso(): void {
         $input = json_decode(file_get_contents('php://input'), true);
-        $precio = isset($input['costo']) ? floatval($input['costo']) : (isset($input['precio']) ? floatval($input['precio']) : 0.0);
-        if (empty($input['nombre']) || empty($input['unidad'])) {
+
+        // --- LÓGICA MODIFICADA ---
+        // Leemos el 'precio_total' que envía la PWA
+        if (!isset($input['precio_total'])) {
             http_response_code(400);
-            echo json_encode(['error' => 'Nombre y Unidad son obligatorios']);
+            echo json_encode(['error' => 'Falta el campo precio_total']);
             return;
+        }
+        $precioTotal = floatval($input['precio_total']);
+        // --- FIN LÓGICA MODIFICADA ---
+
+        if (empty($input['nombre']) || empty($input['unidad'])) {
+            // ... (el resto de tu validación)
         }
         try {
             $estatus = $input['estatus'] ?? 'PENDIENTE_TECNICO';
-            $nuevoRecurso = $this->calculosService->crearNuevoRecurso($input['nombre'], $input['unidad'], $precio, $estatus);
+            $nuevoRecurso = $this->calculosService->crearNuevoRecurso($input['nombre'], $input['unidad'], $precioTotal, $estatus); // <-- CAMBIADO
             header('Content-Type: application/json');
             echo json_encode(['status' => 'success', 'data' => $nuevoRecurso]);
         } catch (Exception $e) {
