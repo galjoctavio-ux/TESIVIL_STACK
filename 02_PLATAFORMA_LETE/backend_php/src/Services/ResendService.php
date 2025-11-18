@@ -11,14 +11,15 @@ class ResendService {
         $this->emailFrom = 'Luz en tu Espacio <cotizaciones@tesivil.com>';
     }
 
-    public function enviarCotizacion(string $uuid, string $emailCliente, string $nombreCliente): void {
+    public function enviarCotizacion(string $uuid, string $emailCliente, string $nombreCliente, ?int $cotizacionId = null): void {
         try {
+            $identificador = $cotizacionId ?? $uuid;
             $pdfUrl = "https://www.tesivil.com/api/cotizar/pdf?uuid=" . $uuid;
             $whatsappNumber = "5213326395038"; // Tu número formato internacional
-            $mensajeWsp = "Hola, recibí la cotización $uuid y quiero autorizarla. ¿Cuáles son los pasos para el anticipo?";
+            $mensajeWsp = "Hola, recibí la cotización $identificador y quiero autorizarla. ¿Cuáles son los pasos para el anticipo?";
             $linkWsp = "https://wa.me/$whatsappNumber?text=" . urlencode($mensajeWsp);
 
-            $subject = "Propuesta Comercial: Luz en tu Espacio (Folio #$uuid)";
+            $subject = "Propuesta Comercial: Luz en tu Espacio (Folio #$identificador)";
             
             // DISEÑO DEL CORREO: Limpio, Profesional y Enfocado a la Acción
             $htmlBody = '

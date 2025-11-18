@@ -73,7 +73,7 @@ class CotizacionController {
             $nombreAsesorDesdeBD = $this->calculosService->obtenerNombreUsuarioPorId($input['tecnico_id']);
             $tecnicoNombreFinal = $nombreAsesorDesdeBD ?? $input['tecnico_nombre'] ?? 'Asesor de Servicio';
 
-            $uuid = $this->calculosService->guardarCotizacion(
+            $guardadoResult = $this->calculosService->guardarCotizacion(
                 $resultado,
                 $input['tecnico_id'],
                 $tecnicoNombreFinal,
@@ -81,9 +81,11 @@ class CotizacionController {
                 $estado,
                 $razonDetencion,
                 $estimacionIA,
-
-          $input['caso_id'] // <-- PASAR EL ID DEL CASO
+                $input['caso_id'] // <-- PASAR EL ID DEL CASO
             );
+
+            $uuid = $guardadoResult['uuid'];
+            $cotizacionId = $guardadoResult['cotizacionId'];
 
             $pdfUrl = null;
             if ($uuid) {
@@ -100,7 +102,7 @@ class CotizacionController {
 
             if ($estado === 'ENVIADA') {
                 $resendService = new ResendService();
-                $resendService->enviarCotizacion($uuid, $input['cliente_email'], $clienteData['nombre']);
+                $resendService->enviarCotizacion($uuid, $input['cliente_email'], $clienteData['nombre'], $cotizacionId);
                 $mensajeRespuesta = 'Cotización enviada correctamente al cliente.';
             } else {
                 $mensajeRespuesta = '🛑 Cotización DETENIDA para revisión administrativa. Razón: ' . $razonDetencion;
@@ -250,7 +252,7 @@ class CotizacionController {
             $datos = $this->calculosService->obtenerDatosEnvio((int)$input['id']);
             if ($datos) {
                 $resend = new ResendService();
-                $resend->enviarCotizacion($datos['uuid'], $datos['cliente_email'], $datos['cliente_nombre']);
+                $resend->enviarCotizacion($datos['uuid'], $datos['cliente_email'], $datos['cliente_nombre'], (int)$input['id']);
             }
             echo json_encode(['status' => 'success', 'message' => 'Cotización autorizada y enviada al cliente.']);
         } catch (Exception $e) {
@@ -299,7 +301,7 @@ class CotizacionController {
                 }
 
                 $resendService = new ResendService();
-                $resendService->enviarCotizacion($res['uuid'], $input['cliente_email'], $input['cliente_nombre']);
+                $resendService->enviarCotizacion($res['uuid'], $input['cliente_email'], $input['cliente_nombre'], $res['id']);
             }
 
             echo json_encode(['status' => 'success', 'data' => $res]);
@@ -344,7 +346,7 @@ class CotizacionController {
             $datos = $this->calculosService->obtenerDatosEnvio((int)$input['id']);
             if ($datos) {
                 $resend = new ResendService();
-                $resend->enviarCotizacion($datos['uuid'], $datos['cliente_email'], $datos['cliente_nombre']);
+                $resend->enviarCotizacion($datos['uuid'], $datos['cliente_email'], $datos['cliente_nombre'], (int)$input['id']);
                 echo json_encode(['status' => 'success', 'message' => 'Correo reenviado exitosamente a ' . $datos['cliente_email']]);
             } else {
                 http_response_code(404); echo json_encode(['error' => 'Cotización no encontrada.']);

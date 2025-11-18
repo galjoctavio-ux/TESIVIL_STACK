@@ -237,7 +237,7 @@ class CalculosService {
                 $stmtMO->execute([$cotizacionId, $tarea['descripcion'], floatval($tarea['horas'])]);
             }
 
-            return $uuid;
+            return ['uuid' => $uuid, 'cotizacionId' => $cotizacionId];
 
         } catch (Exception $e) {
             // No hacemos rollback aquí, dejamos que el llamador lo maneje.
@@ -517,7 +517,7 @@ class CalculosService {
             $descuentoOriginal = floatval($originalData['descuento_pct'] ?? 0.0);
             $resultado = $this->calcularCotizacion($nuevosItems, $nuevaMO, $descuentoOriginal);
 
-            $uuid = $this->guardarCotizacion(
+            $guardadoResult = $this->guardarCotizacion(
                 $resultado,
                 $originalData['tecnico_id_externo'],
                 $originalData['tecnico_nombre'],
@@ -529,12 +529,11 @@ class CalculosService {
                 $descuentoOriginal
             );
 
-            $cotizacionId = $this->db->lastInsertId();
             $this->db->commit();
 
             return [
-                'id' => $cotizacionId,
-                'uuid' => $uuid,
+                'id' => $guardadoResult['cotizacionId'],
+                'uuid' => $guardadoResult['uuid'],
                 'mensaje' => "Clonada exitosamente. Nueva versión creada."
             ];
 
