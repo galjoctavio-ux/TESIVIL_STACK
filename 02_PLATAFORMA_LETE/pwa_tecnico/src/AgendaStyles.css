@@ -8,7 +8,13 @@
   box-sizing: border-box;
   border-radius: 6px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  overflow: hidden;
+
+  /* --- Correcciones Visuales Críticas --- */
+  min-height: 110px; /* Asegura espacio para botones */
+  z-index: 10; /* Se superpone a las líneas */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 
   /* Estilos por defecto (ej. levantamiento o 'default') */
   background-color: #E0E7FF; /* Fondo azul claro */
@@ -63,3 +69,32 @@
 .cita-actions { margin-top: 8px; display: flex; flex-wrap: wrap; /* Permite que los botones bajen si no caben / gap: 8px; border-top: 1px solid rgba(100, 116, 139, 0.2); / Separador sutil */ padding-top: 6px; }
 .cita-icon-button { display: inline-flex; align-items: center; justify-content: center; background-color: rgba(255, 255, 255, 0.4); border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 6px; padding: 4px 6px; font-size: 1rem; /* Controla el tamaño del emoji / line-height: 1; cursor: pointer; color: #334155; / Color del emoji (texto) */ text-decoration: none; transition: background-color 0.2s ease; }
 .cita-icon-button:hover { background-color: rgba(255, 255, 255, 0.8); }
+
+/* --- Estilos de la Línea de Hora --- */
+.timeline-hora {
+  z-index: 1;
+}
+
+/* --- Estilos del Header del Día --- */
+.dia-header {
+  text-align: center;
+  padding: 15px 0;
+  background-color: #fff; /* Para que no se transparente al scrollear si es sticky */
+  border-bottom: 1px solid #eee;
+}
+
+.dia-header strong {
+  display: block;
+  font-size: 1.2rem;
+  text-transform: capitalize; /* Para que 'lunes' sea 'Lunes' */
+}
+
+/* --- Corrección del Calendario Flotante (DatePicker FAB) --- */
+.react-datepicker-popper {
+  /* Forzamos la posición para que no se corte en móviles */
+  bottom: 75px !important; /* Distancia desde abajo */
+  top: auto !important; /* Anula el 'top' por defecto */
+  left: 10px !important; /* Alineado con el botón FAB */
+  right: auto !important; /* Anula el 'right' por defecto */
+  z-index: 999; /* Asegura que esté por encima de todo */
+}
