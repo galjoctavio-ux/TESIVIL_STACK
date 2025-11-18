@@ -32,7 +32,7 @@ export const requireAuth = async (req, res, next) => {
     // 2. Obtener el perfil del usuario (para saber su rol)
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('rol')
+      .select('rol, ea_user_id') // <-- AÑADIMOS EL NUEVO CAMPO
       .eq('id', userId)
       .single();
 
@@ -51,7 +51,8 @@ export const requireAuth = async (req, res, next) => {
     req.user = {
       id: userId,
       email: payload.email,
-      rol: profile.rol
+      rol: profile.rol,
+      ea_user_id: profile.ea_user_id // <-- AÑADIMOS EL ID DE EASY!APPOINTMENTS
     };
     
     // LÍNEA ERRÓNEA ELIMINADA

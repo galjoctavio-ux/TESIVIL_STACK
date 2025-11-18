@@ -63,7 +63,7 @@ export const checkAvailability = async (req, res) => {
 */
 export const getAgendaPorDia = async (req, res) => {
 // 1. Obtenemos el ID del 'req.user' que inyectó el middleware 'requireAuth'
-const tecnico_id = req.user.id;
+const tecnico_id = req.user.ea_user_id; // <-- Usamos el ID de ea_users (ej: 23)
 const { fecha } = req.query; // Fecha en formato 'YYYY-MM-DD'
 
 if (!fecha) {
