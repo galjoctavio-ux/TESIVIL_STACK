@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../Services/CalculosService.php';
 require_once __DIR__ . '/../Services/GeminiService.php';
+require_once __DIR__ . '/../Services/ResendService.php';
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -10,6 +11,7 @@ use Dompdf\Options;
 class RevisionPdfController {
     private CalculosService $service;
     private GeminiService $gemini;
+    private ResendService $resend;
     private string $apiKey;
 
     public function __construct() {
@@ -20,13 +22,13 @@ class RevisionPdfController {
         $this->apiKey = $_ENV['GEMINI_API_KEY'];
         $this->service = new CalculosService();
         $this->gemini = new GeminiService();
+        $this->resend = new ResendService();
     }
 
     public function generarYGuardarPdfRevision(int $revisionId): ?string {
-        // NOTE: Assuming a method exists in CalculosService to get revision data.
         $datos = $this->service->obtenerRevisionCompletaPorId($revisionId);
-        if (!$datos) {
-            error_log("No se encontraron datos para la revisión ID: " . $revisionId);
+        if (!$datos || !$datos['header']) {
+            error_log("No se encontraron datos completos para la revisión ID: " . $revisionId);
             return null;
         }
 
@@ -43,46 +45,11 @@ class RevisionPdfController {
         $diagnosticoIA = $this->generarDiagnosticoIA($datos);
         $diagnosticoIAHtml = '<p style="text-align: justify; padding: 0 5px 15px 5px; font-style: italic; color: #555;">' . htmlspecialchars($diagnosticoIA) . '</p>';
 
-        $estilosCss = <<<EOD
-        <style>
-            @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
-            @page { margin: 25px; }
-            body { font-family: 'Roboto', sans-serif; color: #444; font-size: 12px; line-height: 1.5; }
-            .header-table { width: 100%; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 25px; }
-            .logo-img { max-width: 180px; max-height: 60px; }
-            .empresa-info { text-align: right; font-size: 10px; color: #6c757d; }
-            .empresa-info strong { font-size: 12px; color: #0056b3; }
-            .cliente-box { border: 1px solid #dee2e6; border-left: 5px solid #0056b3; padding: 15px; margin-bottom: 25px; border-radius: 4px; background-color: #f8f9fa; }
-            .cliente-label { font-weight: bold; color: #0056b3; font-size: 9px; text-transform: uppercase; margin-bottom: 4px; }
-            .cliente-dato { font-size: 12px; margin-bottom: 5px; }
-            .section-header { background-color: #0056b3; color: white; padding: 8px 12px; font-weight: bold; font-size: 12px; margin-top: 20px; border-radius: 4px 4px 0 0; }
-            .items-table { width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 20px; }
-            .items-table td { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
-            .items-table th { background-color: #f8f9fa; color: #0056b3; text-transform: uppercase; font-size: 9px; letter-spacing: 1px; padding: 10px 15px; text-align: left; }
-            .items-table tr:nth-child(even) { background-color: #fbfbfb; }
-            .items-table tr:last-child td { border-bottom: none; }
-
-            .firma-box { border: 1px dashed #ccc; padding: 10px; width: 250px; height: 120px; text-align: center; display: inline-block; margin: 10px; }
-            .firma-img { max-width: 100%; max-height: 80px; }
-            .firma-label { font-size: 10px; color: #555; margin-top: 5px; }
-
-            .hallazgos-table { width: 100%; }
-            .hallazgos-table td { padding: 8px; border-bottom: 1px solid #f0f0f0; }
-            .hallazgos-table .lbl { font-weight: bold; width: 70%; }
-            .hallazgos-table .val { text-align: right; width: 30%; }
-
-            .val-bueno { color: #28a745; font-weight: bold; }
-            .val-regular { color: #fd7e14; font-weight: bold; }
-            .val-malo { color: #dc3545; font-weight: bold; }
-
-            .equipo-estado-Bueno { background-color: #e8f5e9; }
-            .equipo-estado-Regular { background-color: #fff8e1; }
-            .equipo-estado-Malo { background-color: #fbe9e7; }
-        </style>
-EOD;
+        $cssPath = __DIR__ . '/../../public/css/revision-pdf.css';
+        $estilosCss = file_get_contents($cssPath);
 
         $html = '
-        <html> <head> <meta charset="UTF-8"> ' . $estilosCss . ' </head> <body>
+        <html> <head> <meta charset="UTF-8"> <style>' . $estilosCss . '</style> </head> <body>
         <table class="header-table"> <tr>
             <td><img src="https://i.imgur.com/Q9bQ23T.png" class="logo-img" style="max-width: 150px;"></td>
             <td class="empresa-info">
@@ -182,6 +149,7 @@ EOD;
         $data = json_decode(file_get_contents('php://input'), true);
         $revisionId = $data['revision_id'] ?? null;
         $isGetRequest = $_SERVER['REQUEST_METHOD'] === 'GET';
+        $sendEmail = filter_var($data['send_email'] ?? $_GET['send_email'] ?? 'false', FILTER_VALIDATE_BOOLEAN);
 
         // Si no hay JSON y es GET, intentar leer Query Param
         if (!$revisionId && $isGetRequest && isset($_GET['revision_id'])) {
@@ -190,7 +158,6 @@ EOD;
 
         if (!$revisionId) {
             http_response_code(400);
-            // Distinguir respuesta para no romper API existente
             if (!$isGetRequest) {
                 echo json_encode(['error' => 'Falta el revision_id.']);
             } else {
@@ -200,33 +167,45 @@ EOD;
         }
 
         try {
-            // La generación es la misma para ambos métodos
             $relativeUrl = $this->generarYGuardarPdfRevision((int)$revisionId);
 
             if ($relativeUrl) {
-                // Si es GET, servimos el PDF directamente para visualización en el navegador
+                $fullPath = __DIR__ . '/../../public/' . $relativeUrl;
+
+                if ($sendEmail && !$isGetRequest) {
+                    $datosRevision = $this->service->obtenerRevisionCompletaPorId((int)$revisionId);
+                    if ($datosRevision && isset($datosRevision['header']['cliente_email'])) {
+                        $this->resend->enviarRevision(
+                            $datosRevision['header']['cliente_email'],
+                            $datosRevision['header']['cliente_nombre'],
+                            (int)$revisionId,
+                            $fullPath
+                        );
+                    }
+                }
+
                 if ($isGetRequest) {
-                    $filePath = __DIR__ . '/../../public/' . $relativeUrl;
-                    if (file_exists($filePath)) {
+                    if (file_exists($fullPath)) {
                         header('Content-Type: application/pdf');
-                        header('Content-Disposition: inline; filename="' . basename($filePath) . '"');
-                        header('Content-Length: ' . filesize($filePath));
-                        readfile($filePath);
-                        exit; // Detenemos la ejecución para no enviar más output
+                        header('Content-Disposition: inline; filename="' . basename($fullPath) . '"');
+                        header('Content-Length: ' . filesize($fullPath));
+                        readfile($fullPath);
+                        exit;
                     } else {
                         http_response_code(404);
                         echo 'Error: El archivo PDF generado no fue encontrado.';
                         return;
                     }
-                } else { // Si es POST, mantenemos la respuesta JSON
+                } else {
                     echo json_encode(['pdf_url' => $relativeUrl]);
                 }
             } else {
                 http_response_code(500);
+                $errorMessage = 'No se pudo generar el PDF de la revisión.';
                 if (!$isGetRequest) {
-                    echo json_encode(['error' => 'No se pudo generar el PDF de la revisión.']);
+                    echo json_encode(['error' => $errorMessage]);
                 } else {
-                    echo 'Error: No se pudo generar el PDF de la revisión.';
+                    echo 'Error: ' . $errorMessage;
                 }
             }
         } catch (Exception $e) {

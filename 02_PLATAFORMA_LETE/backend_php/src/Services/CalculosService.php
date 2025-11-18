@@ -695,5 +695,63 @@ class CalculosService {
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    public function obtenerRevisionCompletaPorId(int $revisionId): ?array {
+        try {
+            // 1. Obtener la cabecera de la revisión
+            $sqlHeader = "SELECT
+                            r.id,
+                            r.fecha_creacion as fecha_revision,
+                            c.cliente_nombre,
+                            c.cliente_direccion,
+                            c.cliente_email,
+                            u.nombre as tecnico_nombre,
+                            r.firma_cliente_base64 as firma_base64
+                          FROM revisiones r
+                          LEFT JOIN casos c ON r.caso_id = c.id
+                          LEFT JOIN users u ON r.tecnico_id = u.id_externo
+                          WHERE r.id = ?";
+            $stmtHeader = $this->db->prepare($sqlHeader);
+            $stmtHeader->execute([$revisionId]);
+            $header = $stmtHeader->fetch(PDO::FETCH_ASSOC);
+            if (!$header) return null;
+
+            // 2. Obtener mediciones
+            $sqlMediciones = "SELECT * FROM revisiones_mediciones WHERE revision_id = ?";
+            $stmtMediciones = $this->db->prepare($sqlMediciones);
+            $stmtMediciones->execute([$revisionId]);
+            $mediciones = $stmtMediciones->fetch(PDO::FETCH_ASSOC);
+
+            // 3. Obtener equipos
+            $sqlEquipos = "SELECT * FROM revisiones_equipos WHERE revision_id = ?";
+            $stmtEquipos = $this->db->prepare($sqlEquipos);
+            $stmtEquipos->execute([$revisionId]);
+            $equipos = $stmtEquipos->fetchAll(PDO::FETCH_ASSOC);
+
+            // 4. Obtener causas de alto consumo
+            $sqlCausas = "SELECT causa FROM revisiones_causas_alto_consumo WHERE revision_id = ?";
+            $stmtCausas = $this->db->prepare($sqlCausas);
+            $stmtCausas->execute([$revisionId]);
+            $causas = $stmtCausas->fetchAll(PDO::FETCH_COLUMN);
+
+            // 5. Obtener recomendaciones
+            $sqlRecomendaciones = "SELECT recomendaciones FROM revisiones_recomendaciones WHERE revision_id = ?";
+            $stmtRecomendaciones = $this->db->prepare($sqlRecomendaciones);
+            $stmtRecomendaciones->execute([$revisionId]);
+            $recomendaciones = $stmtRecomendaciones->fetchColumn();
+
+            return [
+                'header' => $header,
+                'mediciones' => $mediciones,
+                'equipos' => $equipos,
+                'causas_alto_consumo' => $causas,
+                'recomendaciones_tecnico' => $recomendaciones,
+                'firma_base64' => $header['firma_base64'] ?? 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+            ];
+        } catch (PDOException $e) {
+            error_log("Error en obtenerRevisionCompletaPorId: " . $e->getMessage());
+            return null;
+        }
+    }
 }
 ?>
