@@ -174,6 +174,34 @@ EOD;
         return 'pdfs/' . $nombreFinal;
     }
 
+    /**
+     * Método de entrada para la ruta. Maneja el request y la respuesta JSON.
+     */
+    public function generarPdfFinalDesdeRevision(): void {
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        if (!isset($data['revision_id'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Falta el revision_id.']);
+            return;
+        }
+
+        try {
+            $url = $this->generarYGuardarPdfRevision((int)$data['revision_id']);
+            if ($url) {
+                // El header Content-Type ya se establece en el enrutador principal
+                echo json_encode(['pdf_url' => $url]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['error' => 'No se pudo generar el PDF de la revisión.']);
+            }
+        } catch (Exception $e) {
+            http_response_code(500);
+            error_log("Error en generarPdfFinalDesdeRevision: " . $e->getMessage());
+            echo json_encode(['error' => 'Error interno del servidor al generar el PDF.']);
+        }
+    }
+
     private function generarDiagnosticoIA(array $datosRevision): string {
         $apiKey = $this->apiKey;
         $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey;

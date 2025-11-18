@@ -317,6 +317,16 @@ EOD;
     }
 
 
+    // Enrutador nuevo llamará a este método
+    public function generarPdfFromUuid(): void {
+        if (isset($_GET['uuid'])) {
+            $this->generarPdf($_GET['uuid']);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Falta el parámetro UUID.']);
+        }
+    }
+
     // --- MÉTODO LEGACY: SIRVE EL PDF (AHORA DESDE CACHÉ O LO GENERA) ---
     public function generarPdf(string $uuid): void {
         $datos = $this->service->obtenerCotizacionPorUuid($uuid);
