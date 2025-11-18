@@ -5,11 +5,11 @@ import api from '../apiService';
 import SignatureCanvas from 'react-signature-canvas';
 
 // (Estilos - sin cambios)
-const formContainerStyle = { padding: '20px', background: '#fff', margin: '20px', borderRadius: '8px' };
+const formContainerStyle = { padding: '16px', background: '#fff', margin: '0', borderRadius: '8px' };
 // ... (todos tus demás estilos van aquí) ...
 const inputGroupStyle = { marginBottom: '15px', display: 'flex', flexDirection: 'column' };
 const labelStyle = { fontWeight: 'bold', marginBottom: '5px' };
-const tabContainerStyle = { display: 'flex', gap: '5px', borderBottom: '1px solid #ccc', marginBottom: '20px', flexWrap: 'wrap' };
+const tabContainerStyle = { display: 'flex', gap: '5px', borderBottom: '1px solid #ccc', marginBottom: '16px', flexWrap: 'wrap' };
 const tabStyle = { padding: '10px', cursor: 'pointer', border: '1px solid #ccc', borderBottom: 'none', background: '#f0f0f0' };
 const activeTabStyle = { ...tabStyle, background: '#fff', borderBottom: '1px solid #fff', marginTop: '-1px' };
 const equipoBoxStyle = { border: '1px solid #ccc', padding: '10px', marginTop: '10px', borderRadius: '5px', display: 'flex', flexWrap: 'wrap', gap: '10px' };
@@ -232,7 +232,7 @@ function RevisionForm() {
 
   // --- RENDERIZADO PRINCIPAL (MODIFICADO) ---
   return (
-    <div style={{ padding: '20px' }}>
+    <div style={{ padding: '16px' }}>
       <style>{keyframesStyle}</style>
 
       {isSubmitting && (
@@ -245,7 +245,7 @@ function RevisionForm() {
       {/* --- TÍTULO MODIFICADO --- */}
       <h2>Iniciando Revisión para el Caso #{caso ? caso.id : '...'}</h2>
       {caso && (
-        <div style={{...formContainerStyle, background: '#f8f9fa', border: '1px solid #e9ecef'}}>
+        <div style={{...formContainerStyle, background: '#f8f9fa', border: '1px solid #e9ecef', marginBottom: '16px'}}>
           <strong>Cliente:</strong> {caso.cliente_nombre}<br/>
           <strong>Dirección:</strong> {caso.cliente_direccion}<br/>
           <strong>Tipo de Caso:</strong> {caso.tipo}
