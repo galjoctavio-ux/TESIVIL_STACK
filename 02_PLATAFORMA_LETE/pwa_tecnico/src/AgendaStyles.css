@@ -8,7 +8,11 @@
   box-sizing: border-box;
   border-radius: 6px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  overflow: hidden;
+  min-height: 110px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 
   /* Estilos por defecto (ej. levantamiento o 'default') */
   background-color: #E0E7FF; /* Fondo azul claro */
@@ -66,15 +70,22 @@
 
 /* --- Estilos del Header de Día --- */
 .dia-header {
-  text-align: center; /* Centra el texto */
-  padding: 12px 0;
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: #334155;
-  border-bottom: 1px solid #e2e8f0;
-  background-color: #f8fafc;
+  text-align: center;
+  padding: 15px 0;
+  background-color: #fff; /* Para que no se transparente al scrollear si es sticky */
+  border-bottom: 1px solid #eee;
 }
 
 .dia-header strong {
-  margin-right: 8px; /* Espacio entre el día y la fecha */
+  display: block;
+  font-size: 1.2rem;
+  text-transform: capitalize; /* Para que 'lunes' sea 'Lunes' */
+}
+
+/* --- Estilos para el DatePicker FAB --- */
+.react-datepicker-popper {
+  z-index: 101 !important; /* Asegura que esté por encima del FAB */
+  bottom: 85px !important; /* Posiciona arriba del botón (60px altura + 20px margen + 5px extra) */
+  left: 10px !important; /* Margen desde la izquierda */
+  top: auto !important; /* Anula el 'top' por defecto para que 'bottom' funcione */
 }

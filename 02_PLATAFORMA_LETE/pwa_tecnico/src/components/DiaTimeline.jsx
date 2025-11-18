@@ -19,6 +19,8 @@ const hourSlotStyles = {
   height: `${HOUR_HEIGHT}px`,
   borderBottom: '1px solid #e0e0e0',
   boxSizing: 'border-box',
+  position: 'relative',
+  zIndex: 1,
 };
 
 const timeLabelStyles = {
