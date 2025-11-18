@@ -83,7 +83,7 @@ server {
     # =========================================================
     # --- Cuentatrón Diagnóstico (Next.js en Puerto 3003) ---
     # =========================================================
-    location ^~ /cuantatron/diagnostico {
+    location ^~ /cuentatron/diagnostico {
         proxy_pass http://localhost:3003;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
