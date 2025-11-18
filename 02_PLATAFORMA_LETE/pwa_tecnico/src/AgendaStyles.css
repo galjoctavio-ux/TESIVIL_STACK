@@ -1,1 +1,60 @@
-/* Empty CSS file for Agenda component */
+/* --- Estilos de la Tarjeta de Cita --- */
+
+.cita-card {
+/* Estilos base que ya tenías */
+position: absolute;
+left: 70px;
+right: 10px;
+border-radius: 6px;
+padding: 8px 12px;
+box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+overflow: hidden;
+
+/* Estilos por defecto (ej. levantamiento o 'default') */
+background-color: #E0E7FF; /* Fondo azul claro */
+border-left: 4px solid #4F46E5; /* Borde azul oscuro */
+}
+
+/* --- Variaciones de Color --- */
+
+/* Para 'alto_consumo' (Amarillo) */
+.cita-card.card-alto_consumo {
+background-color: #FEF9C3; /* Fondo amarillo claro */
+border-left: 4px solid #F59E0B; /* Borde amarillo */
+}
+
+/* Para 'proyecto' (quizás un verde?) */
+.cita-card.card-proyecto {
+background-color: #D1FAE5; /* Fondo verde claro */
+border-left: 4px solid #10B981; /* Borde verde */
+}
+
+
+/* --- Estilos del Texto Dentro de la Tarjeta --- */
+
+.cita-card strong {
+display: block;
+font-size: 0.95rem;
+font-weight: 600;
+color: #1E293B; /* Texto oscuro */
+margin-bottom: 2px;
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+}
+
+.cita-card p {
+font-size: 0.85rem;
+color: #475569; /* Texto gris */
+margin: 0;
+line-height: 1.3;
+}
+
+.cita-card .cita-direccion {
+font-size: 0.8rem;
+color: #64748B;
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+margin-top: 4px;
+}

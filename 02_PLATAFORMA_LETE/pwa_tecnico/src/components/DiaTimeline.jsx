@@ -31,21 +31,6 @@ const timeLabelStyles = {
     paddingRight: '10px',
   };
 
-const appointmentCardStyles = {
-  position: 'absolute',
-  left: '60px', // Align with the grid
-  right: '10px',
-  backgroundColor: 'rgba(59, 130, 246, 0.8)',
-  borderLeft: '4px solid #2563EB',
-  borderRadius: '4px',
-  color: 'white',
-  padding: '8px',
-  boxSizing: 'border-box',
-  fontSize: '14px',
-  overflow: 'hidden',
-  boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
-};
-
 const DiaTimeline = ({ date }) => {
   const [citas, setCitas] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -100,16 +85,22 @@ const DiaTimeline = ({ date }) => {
             const durationInMinutes = end.diff(start, 'minute');
             const height = (durationInMinutes / 60) * HOUR_HEIGHT;
 
+            // --- Lógica para las Clases CSS ---
+            const cardClass = `cita-card card-${cita.caso_tipo || 'default'}`;
+
+
             return (
               <div
                 key={cita.id}
+                className={cardClass}
                 style={{
-                  ...appointmentCardStyles,
                   top: `${top}px`,
                   height: `${height}px`,
                 }}
               >
-                <strong>{cita.cliente_nombre}</strong>
+                <strong>{cita.cliente_nombre || 'Cliente no asignado'}</strong>
+                <p>{cita.servicio_nombre || 'Servicio no especificado'}</p>
+                <div className="cita-direccion">{cita.caso_direccion || ''}</div>
               </div>
             );
           })}
