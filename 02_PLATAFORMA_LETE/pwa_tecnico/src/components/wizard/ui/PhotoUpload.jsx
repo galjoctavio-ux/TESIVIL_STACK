@@ -1,65 +1,63 @@
-import React, { useState, useRef } from 'react';
-import { UploadCloud, X } from 'lucide-react';
+import React from 'react';
+import { Camera, X } from 'lucide-react';
+import { cn } from '../../../utils/cn.js';
 
-const PhotoUpload = ({ onFileChange }) => {
-  const [preview, setPreview] = useState(null);
-  const fileInputRef = useRef(null);
-
+const PhotoUpload = ({ photo, onUpload, onClear, label }) => {
   const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPreview(reader.result);
-        onFileChange(reader.result); // Pass base64 string to parent
+        onUpload(reader.result);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleRemove = (e) => {
+  const handleClearPhoto = (e) => {
     e.stopPropagation();
-    setPreview(null);
-    onFileChange(null);
-    if(fileInputRef.current) {
-        fileInputRef.current.value = "";
-    }
-  };
-
-  const handleClick = () => {
-    if(!preview && fileInputRef.current) {
-        fileInputRef.current.click()
-    }
+    e.preventDefault();
+    onClear();
   }
 
   return (
-    <div
-      className="relative w-full h-48 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer text-gray-500 hover:bg-gray-100 hover:border-blue-500 transition-colors"
-      onClick={handleClick}
-    >
-      <input
-        type="file"
-        accept="image/*"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        className="hidden"
-      />
-      {preview ? (
-        <>
-          <img src={preview} alt="Preview" className="w-full h-full object-cover rounded-lg" />
-          <button
-            onClick={handleRemove}
-            className="absolute top-2 right-2 bg-white rounded-full p-1.5 shadow-md text-gray-700 hover:bg-red-500 hover:text-white transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </>
-      ) : (
-        <div className="text-center">
-          <UploadCloud size={48} className="mx-auto mb-2" />
-          <p className="font-semibold">Tocar para agregar evidencia</p>
-        </div>
-      )}
+    <div className="w-full">
+      {label && <label className="block text-sm font-medium text-gray-600 mb-2">{label}</label>}
+      <div
+        className={cn(
+          "relative w-full aspect-video rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300",
+          photo
+            ? "border-transparent bg-gray-200"
+            : "border-blue-300 bg-blue-50 hover:bg-blue-100"
+        )}
+        onClick={() => document.getElementById('photo-upload-input').click()}
+      >
+        <input
+          type="file"
+          id="photo-upload-input"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        {photo ? (
+          <>
+            <img src={photo} alt="Uploaded" className="w-full h-full object-cover rounded-xl" />
+            <button
+              type="button"
+              onClick={handleClearPhoto}
+              className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600 transition-transform transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              aria-label="Eliminar foto"
+            >
+              <X size={16} />
+            </button>
+          </>
+        ) : (
+          <div className="text-center text-blue-500">
+            <Camera size={48} className="mx-auto mb-2 opacity-80" />
+            <p className="font-semibold text-sm">Tocar para subir foto</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

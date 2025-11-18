@@ -2,7 +2,7 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
-import RevisionForm from './pages/RevisionForm';
+import RevisionWizard from './pages/RevisionWizard';
 import Cotizador from './pages/Cotizador';
 import AgendaPage from './pages/AgendaPage';
 import DetalleCaso from './pages/DetalleCaso';
@@ -38,7 +38,7 @@ function App() {
           path="/revision/:casoId"
           element={
             <ProtectedRoute>
-              <RevisionForm />
+              <RevisionWizard />
             </ProtectedRoute>
           }
         />

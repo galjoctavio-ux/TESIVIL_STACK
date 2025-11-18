@@ -1,29 +1,32 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { cn } from '../../../utils/cn.js';
 
-const BigToggle = ({ label, onChange }) => {
-  const [isOn, setIsOn] = useState(false);
-
-  const handleToggle = (value) => {
-    setIsOn(value);
-    onChange(value);
-  };
-
+const BigToggle = ({ label, value, onChange, options = [{ label: 'No', value: false }, { label: 'Sí', value: true }] }) => {
   return (
-    <div className="my-4 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
-      <p className="block text-md font-medium text-gray-700 mb-3">{label}</p>
-      <div className="flex w-full">
-        <button
-          onClick={() => handleToggle(true)}
-          className={`flex-1 py-3 text-lg font-bold rounded-l-lg transition-colors ${isOn ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-        >
-          SÍ
-        </button>
-        <button
-          onClick={() => handleToggle(false)}
-          className={`flex-1 py-3 text-lg font-bold rounded-r-lg transition-colors ${!isOn ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-        >
-          NO
-        </button>
+    <div className="w-full">
+      <label className="block text-sm font-medium text-gray-600 mb-2">
+        {label}
+      </label>
+      <div className="flex items-center bg-gray-100 rounded-xl p-1.5" style={{ minHeight: '50px' }}>
+        {options.map((option) => {
+          const isActive = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "w-1/2 h-full rounded-lg text-sm font-bold transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
+                isActive
+                  ? "bg-white shadow-md text-blue-600"
+                  : "bg-transparent text-gray-500 hover:bg-gray-200"
+              )}
+              style={{ minHeight: '44px' }}
+            >
+              {option.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

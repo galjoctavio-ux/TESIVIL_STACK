@@ -1,124 +1,177 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
+import InputCard from '../components/wizard/ui/InputCard';
+import BigToggle from '../components/wizard/ui/BigToggle';
+import PhotoUpload from '../components/wizard/ui/PhotoUpload';
+import { AnimatePresence, motion } from 'framer-motion';
 
-import Step1_Generales from '../components/wizard/steps/Step1_Generales';
-import Step2_Medidor from '../components/wizard/steps/Step2_Medidor';
-import Step3_Fugas from '../components/wizard/steps/Step3_Fugas';
-import Step4_Equipos from '../components/wizard/steps/Step4_Equipos';
-import Step5_Diagnostico from '../components/wizard/steps/Step5_Diagnostico';
-import Step6_Resumen from '../components/wizard/steps/Step6_Resumen';
-
+// Mock de los pasos para demostración
 const steps = [
-  { id: 1, title: 'Generales', component: Step1_Generales },
-  { id: 2, title: 'Medidor', component: Step2_Medidor },
-  { id: 3, title: 'Fugas', component: Step3_Fugas },
-  { id: 4, title: 'Equipos', component: Step4_Equipos },
-  { id: 5, title: 'Diagnóstico', component: Step5_Diagnostico },
-  { id: 6, title: 'Resumen', component: Step6_Resumen },
+  { id: 'welcome', title: 'Bienvenida', component: WelcomeStep },
+  { id: 'leak-check', title: 'Revisión de Fugas', component: LeakCheckStep },
+  { id: 'photos', title: 'Evidencia Fotográfica', component: PhotosStep },
+  { id: 'summary', title: 'Resumen y Firma', component: SummaryStep },
 ];
 
+const ProgressBar = ({ current, total }) => {
+  const progress = (current / total) * 100;
+  return (
+    <div className="w-full bg-gray-200 rounded-full h-1.5">
+      <div
+        className="bg-blue-600 h-1.5 rounded-full transition-all duration-500 ease-out"
+        style={{ width: `${progress}%` }}
+      />
+    </div>
+  );
+};
+
 const RevisionWizard = () => {
-  const { casoId } = useParams();
-  const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({});
-  const [direction, setDirection] = useState(1); // 1 for forward, -1 for backward
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [formData, setFormData] = useState({
+    hasLeaks: null,
+    leakDescription: '',
+    leakPhoto: null,
+  });
 
-  const handleNext = () => {
-    if (currentStep < steps.length) {
-      setDirection(1);
-      setCurrentStep(prev => prev + 1);
+  const goToNext = () => {
+    if (currentStepIndex < steps.length - 1) {
+      setCurrentStepIndex(i => i + 1);
     }
   };
 
-  const handleBack = () => {
-    if (currentStep > 1) {
-      setDirection(-1);
-      setCurrentStep(prev => prev - 1);
+  const goToPrevious = () => {
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex(i => i - 1);
     }
   };
 
-  const progressPercentage = ((currentStep -1) / (steps.length - 1)) * 100;
-
-  const slideVariants = {
-    hidden: (direction) => ({
-      x: direction > 0 ? '100%' : '-100%',
-      opacity: 0,
-    }),
-    visible: {
-      x: '0%',
-      opacity: 1,
-      transition: { type: 'spring', stiffness: 260, damping: 30 },
-    },
-    exit: (direction) => ({
-      x: direction > 0 ? '-100%' : '100%',
-      opacity: 0,
-      transition: { type: 'spring', stiffness: 260, damping: 30 },
-    }),
+  const updateFormData = (newData) => {
+    setFormData(prev => ({ ...prev, ...newData }));
   };
+
+  const CurrentStepComponent = steps[currentStepIndex].component;
+  const currentStepTitle = steps[currentStepIndex].title;
+  const isLastStep = currentStepIndex === steps.length - 1;
 
   return (
-    <div className="bg-gray-50 min-h-screen flex flex-col font-sans">
-      {/* Header */}
-      <header className="p-4 bg-white border-b border-gray-200">
-        <div className="max-w-md mx-auto">
-          <p className="text-sm text-gray-500">Caso #{casoId}</p>
-          <h1 className="text-xl font-bold text-gray-800">{steps[currentStep - 1].title}</h1>
-          <div className="mt-2">
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <motion.div
-                className="bg-blue-600 h-2.5 rounded-full"
-                initial={{ width: 0 }}
-                animate={{ width: `${progressPercentage}%` }}
-                transition={{ duration: 0.5 }}
-              />
+    <div className="flex flex-col h-screen bg-gray-50">
+      {/* Header Fijo */}
+      <header className="sticky top-0 z-10 w-full bg-white/80 backdrop-blur-sm shadow-sm">
+        <div className="max-w-md mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="w-1/4">
+              {currentStepIndex > 0 && (
+                <button onClick={goToPrevious} className="text-gray-500 hover:text-gray-800">
+                  <ChevronLeft size={24} />
+                </button>
+              )}
             </div>
-            <p className="text-xs text-right mt-1 text-gray-500">{`Paso ${currentStep} de ${steps.length}`}</p>
+            <div className="w-1/2 text-center">
+              <h1 className="text-lg font-bold text-gray-800 truncate">{currentStepTitle}</h1>
+            </div>
+            <div className="w-1/4" />
+          </div>
+          <div className="mt-3">
+            <ProgressBar current={currentStepIndex + 1} total={steps.length} />
           </div>
         </div>
       </header>
 
-      {/* Body */}
-      <main className="flex-grow p-4 overflow-y-auto mb-24">
-        <div className="max-w-md mx-auto">
-           <AnimatePresence initial={false} custom={direction}>
-              <motion.div
-                key={currentStep}
-                custom={direction}
-                variants={slideVariants}
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-              >
-                {React.createElement(steps[currentStep - 1].component, { formData, setFormData })}
-              </motion.div>
+      {/* Cuerpo del Wizard con scroll */}
+      <main className="flex-grow overflow-y-auto pb-32">
+        <div className="max-w-md mx-auto p-4">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentStepIndex}
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              transition={{ duration: 0.3 }}
+            >
+              <CurrentStepComponent formData={formData} updateFormData={updateFormData} />
+            </motion.div>
           </AnimatePresence>
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-white shadow-lg z-10" style={{boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -2px rgba(0, 0, 0, 0.1)'}}>
-        <div className="max-w-md mx-auto p-4 flex items-center justify-between">
+      {/* Footer Fijo */}
+      <footer className="sticky bottom-0 z-10 w-full bg-white border-t border-gray-200">
+        <div className="max-w-md mx-auto p-4">
           <button
-            onClick={handleBack}
-            disabled={currentStep === 1}
-            className="px-6 py-3 text-gray-600 bg-transparent border border-gray-300 rounded-lg font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            onClick={goToNext}
+            className="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transform transition-transform duration-200 active:scale-95"
           >
-            <ChevronLeft size={24} className="mr-2"/>
-            Atrás
-          </button>
-          <button
-            onClick={handleNext}
-            className="px-6 py-3 text-white bg-blue-600 rounded-lg font-semibold text-lg flex-grow ml-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-          >
-            {currentStep === steps.length ? 'Finalizar' : 'Siguiente'}
-            <ChevronRight size={24} className="ml-2"/>
+            {isLastStep ? 'Finalizar Revisión' : 'Siguiente'}
           </button>
         </div>
       </footer>
     </div>
   );
 };
+
+
+// --- Componentes de Pasos (Ejemplos) ---
+
+function WelcomeStep() {
+  return (
+    <div className="text-center py-12">
+      <h2 className="text-2xl font-bold mb-2">Iniciemos la Revisión</h2>
+      <p className="text-gray-600">Sigue los pasos para completar el diagnóstico.</p>
+    </div>
+  )
+}
+
+function LeakCheckStep({ formData, updateFormData }) {
+  return (
+    <div className="space-y-6">
+      <BigToggle
+        label="¿Detectaste fugas de agua?"
+        value={formData.hasLeaks}
+        onChange={(value) => updateFormData({ hasLeaks: value })}
+      />
+      {formData.hasLeaks && (
+        <InputCard
+          label="Describe la fuga encontrada"
+          id="leak-description"
+          placeholder="Ej: Fuga en la tubería del lavabo"
+          value={formData.leakDescription}
+          onChange={(e) => updateFormData({ leakDescription: e.target.value })}
+        />
+      )}
+    </div>
+  );
+}
+
+function PhotosStep({ formData, updateFormData }) {
+  return (
+     <div className="space-y-6">
+       <PhotoUpload
+        label="Foto de la Fuga"
+        photo={formData.leakPhoto}
+        onUpload={(photoData) => updateFormData({ leakPhoto: photoData })}
+        onClear={() => updateFormData({ leakPhoto: null })}
+      />
+      {/* Añadir más cargas de fotos si es necesario */}
+    </div>
+  )
+}
+
+function SummaryStep({ formData }) {
+  return (
+    <div className="space-y-4">
+       <h2 className="text-xl font-bold border-b pb-2">Resumen</h2>
+       <p><strong>Fugas:</strong> {formData.hasLeaks ? 'Sí' : 'No'}</p>
+       {formData.hasLeaks && <p><strong>Descripción:</strong> {formData.leakDescription}</p>}
+       {formData.leakPhoto && (
+         <div>
+           <strong>Evidencia:</strong>
+           <img src={formData.leakPhoto} alt="Evidencia de fuga" className="mt-2 rounded-xl shadow-md"/>
+         </div>
+       )}
+       <p className="text-center pt-4 text-gray-500">Aquí iría la firma del cliente.</p>
+    </div>
+  )
+}
+
 
 export default RevisionWizard;

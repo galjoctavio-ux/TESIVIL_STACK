@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* Pégalo en pwa_tecnico/src/index.css o App.css */
 
 .spinner-container {
