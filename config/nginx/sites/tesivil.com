@@ -81,6 +81,21 @@ server {
     }
 
     # =========================================================
+    # --- Cuentatrón Diagnóstico (Next.js en Puerto 3003) ---
+    # =========================================================
+    location ^~ /cuantatron/diagnostico {
+        proxy_pass http://localhost:3003;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # =========================================================
     # --- Frontend Panel Admin (Vite Dev Server en 5173) ---
     # =========================================================
     location ^~ /lete/panel/ {
