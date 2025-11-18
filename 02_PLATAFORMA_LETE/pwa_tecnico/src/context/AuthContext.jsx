@@ -29,6 +29,7 @@ export function AuthProvider({ children }) {
 
   // 4. Función de Login
   const login = async (email, password) => {
+    setIsLoading(true); // <-- INICIA LA CARGA
     try {
       const response = await api.post('/auth/login', { email, password });
       const { user, session } = response.data;
@@ -48,13 +49,15 @@ export function AuthProvider({ children }) {
         // Configurar Axios
         api.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
         
-        navigate('/casos'); // Redirigir a la lista de casos
+        navigate('/'); // Redirigir a la nueva página de Agenda
+        setIsLoading(false); // <-- TERMINA LA CARGA (ÉXITO)
         return true; // Éxito
       } else {
         throw new Error('Acceso denegado. Se requiere cuenta de Técnico.');
       }
     } catch (error) {
       console.error('Error en el login:', error);
+      setIsLoading(false); // <-- TERMINA LA CARGA (ERROR)
       // Lanzamos el error para que el formulario de Login lo muestre
       throw error; 
     }
@@ -73,7 +76,7 @@ export function AuthProvider({ children }) {
     // Limpiar Axios
     delete api.defaults.headers.common['Authorization'];
     
-    navigate('/'); // Redirigir a Login
+    navigate('/login'); // Redirigir a Login
   };
 
   // 6. Valor que compartiremos

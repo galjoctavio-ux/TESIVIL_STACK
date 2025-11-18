@@ -8,14 +8,14 @@ function ProtectedRoute({ children }) {
 
   if (isLoading) {
     // Muestra 'Cargando...' mientras el AuthProvider
-    // revisa el localStorage
+    // revisa el localStorage o mientras el login está en proceso.
     return <div>Cargando sesión...</div>;
   }
 
   if (!user) {
     // Si no hay usuario, redirige al Login
     // 'replace' evita que pueda volver atrás con el botón del navegador
-    return <Navigate to="/" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // Si hay usuario, muestra el componente hijo (el Dashboard)

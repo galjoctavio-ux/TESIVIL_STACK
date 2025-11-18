@@ -35,11 +35,11 @@ export default defineConfig({
 
   server: {
     port: 5174,
-    host: 'localhost',
-    hmr: {
-      host: 'www.tesivil.com',
-      protocol: 'wss',
-    },
-    allowedHosts: ['www.tesivil.com']
+    // host: 'localhost', // Comentado para permitir acceso desde cualquier IP
+    // hmr: {
+    //   host: 'www.tesivil.com',
+    //   protocol: 'wss',
+    // },
+    // allowedHosts: ['www.tesivil.com']
   }
 })

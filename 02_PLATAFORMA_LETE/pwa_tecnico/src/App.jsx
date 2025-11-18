@@ -4,7 +4,8 @@ import Login from './pages/Login';
 import CasosList from './pages/CasosList';
 import ProtectedRoute from './components/ProtectedRoute';
 import RevisionForm from './pages/RevisionForm';
-import Cotizador from './pages/Cotizador'; // <--- 1. IMPORTAR EL COMPONENTE
+import Cotizador from './pages/Cotizador';
+import Agenda from './pages/Agenda'; // Import the new Agenda page
 import './App.css';
 
 import ReloadPrompt from './components/ReloadPrompt';
@@ -16,7 +17,7 @@ function App() {
 
       <Routes>
         {/* --- RUTAS PÚBLICAS --- */}
-        <Route path="/" element={<Login />} />
+        <Route path="/login" element={<Login />} />
         
         {/* --- RUTA PÚBLICA "MAGIC LINK" --- 
             La sacamos de ProtectedRoute. Es segura por el token.
@@ -25,6 +26,14 @@ function App() {
 
 
         {/* --- RUTAS PROTEGIDAS --- */}
+        <Route
+          path="/" // Set Agenda as the main protected route
+          element={
+            <ProtectedRoute>
+              <Agenda />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/revision/:casoId"
           element={

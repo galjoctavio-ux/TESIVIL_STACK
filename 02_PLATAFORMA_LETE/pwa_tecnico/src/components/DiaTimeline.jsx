@@ -1,0 +1,128 @@
+import React, { useState, useEffect, useRef } from 'react';
+import dayjs from 'dayjs';
+import { getAgendaPorDia } from '../apiService';
+
+const HOUR_HEIGHT = 80; // 80px per hour
+
+const timelineContainerStyles = {
+  position: 'relative',
+  overflowY: 'auto',
+  height: 'calc(100vh - 70px)', // Adjust based on header height
+};
+
+const hourGridStyles = {
+    paddingLeft: '60px', // Space for the time labels
+};
+
+const hourSlotStyles = {
+  height: `${HOUR_HEIGHT}px`,
+  borderBottom: '1px solid #e0e0e0',
+  boxSizing: 'border-box',
+};
+
+const timeLabelStyles = {
+    position: 'absolute',
+    left: '0px',
+    transform: 'translateY(-50%)',
+    fontSize: '12px',
+    color: '#666',
+    width: '50px',
+    textAlign: 'right',
+    paddingRight: '10px',
+  };
+
+const appointmentCardStyles = {
+  position: 'absolute',
+  left: '60px', // Align with the grid
+  right: '10px',
+  backgroundColor: 'rgba(59, 130, 246, 0.8)',
+  borderLeft: '4px solid #2563EB',
+  borderRadius: '4px',
+  color: 'white',
+  padding: '8px',
+  boxSizing: 'border-box',
+  fontSize: '14px',
+  overflow: 'hidden',
+  boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
+};
+
+const DiaTimeline = ({ date }) => {
+  const [citas, setCitas] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const timelineRef = useRef(null);
+
+  useEffect(() => {
+    const fetchAgenda = async () => {
+      setIsLoading(true);
+      try {
+        const response = await getAgendaPorDia(date);
+        setCitas(response.data || []);
+      } catch (error) {
+        console.error('Error fetching agenda:', error);
+        setCitas([]); // Clear citas on error
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchAgenda();
+  }, [date]);
+
+  useEffect(() => {
+    // Auto-scroll to current time if the view is for today
+    if (dayjs(date).isSame(dayjs(), 'day') && timelineRef.current) {
+      const currentHour = dayjs().hour();
+      const hourEl = timelineRef.current.querySelector(`#hora-${currentHour}`);
+      if (hourEl) {
+        hourEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, []); // Run only on initial mount
+
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+
+  return (
+    <div ref={timelineRef} style={timelineContainerStyles}>
+      {isLoading ? (
+        <p style={{ textAlign: 'center', padding: '20px' }}>Cargando agenda...</p>
+      ) : (
+        <div style={hourGridStyles}>
+          {hours.map(hour => (
+            <div key={hour} id={`hora-${hour}`} style={{ ...hourSlotStyles, position: 'relative' }}>
+               <span style={timeLabelStyles}>{`${String(hour).padStart(2, '0')}:00`}</span>
+            </div>
+          ))}
+
+          {citas.map(cita => {
+            const start = dayjs(cita.start_datetime);
+            const end = dayjs(cita.end_datetime);
+
+            const top = (start.hour() + start.minute() / 60) * HOUR_HEIGHT;
+            const durationInMinutes = end.diff(start, 'minute');
+            const height = (durationInMinutes / 60) * HOUR_HEIGHT;
+
+            return (
+              <div
+                key={cita.id}
+                style={{
+                  ...appointmentCardStyles,
+                  top: `${top}px`,
+                  height: `${height}px`,
+                }}
+              >
+                <strong>{cita.cliente_nombre}</strong>
+              </div>
+            );
+          })}
+
+          {!isLoading && citas.length === 0 && (
+             <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                <p>No hay citas programadas para este día.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default DiaTimeline;
