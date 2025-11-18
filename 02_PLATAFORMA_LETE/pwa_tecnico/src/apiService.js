@@ -8,6 +8,22 @@ const api = axios.create({
   baseURL: VITE_API_BASE_URL,
 });
 
+// 2. NUEVO: Instancia de Axios dedicada para el Backend PHP
+const phpApi = axios.create({
+  baseURL: '/', // El proxy de Vite se encargará de redirigir /api -> backend_php
+});
+
+// Interceptor para manejar errores de forma centralizada para PHP
+phpApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Aquí podrías añadir lógica específica para errores del backend PHP si es necesario
+    console.error('Error en la llamada a la API PHP:', error);
+    // Relanzamos el error para que el componente que hizo la llamada pueda manejarlo
+    return Promise.reject(error);
+  }
+);
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -24,25 +40,13 @@ api.interceptors.response.use(
 export default api;
 
 /**
- * ¡FUNCIÓN FALTANTE!
- * Obtiene el catálogo público de recursos desde el backend PHP
+ * Obtiene el catálogo público de recursos desde el backend PHP.
  */
 export const obtenerRecursos = async () => {
-  try {
-    // Usamos fetch para llamar al backend de PHP, igual que en el panel de admin
-    const response = await fetch(`/api/recursos`);
-
-    if (!response.ok) {
-        throw new Error(`Error de red: ${response.status}`);
-    }
-
-    return await response.json(); // Devuelve { status: 'success', data: [...] }
-
-  } catch (error) {
-    console.error('Error en obtenerRecursos:', error);
-    // Relanzamos el error para que el componente (Cotizador.jsx) pueda atraparlo
-    throw error;
-  }
+  // El bloque try/catch ya no es necesario aquí.
+  // El interceptor de phpApi se encarga de loguear el error y Promise.reject lo relanza.
+  const response = await phpApi.get('/api/recursos');
+  return response.data; // Axios anida la respuesta JSON directamente en la propiedad `data`
 };
 
 export const getAgendaPorDia = async (fecha) => {
@@ -51,109 +55,69 @@ export const getAgendaPorDia = async (fecha) => {
 };
 
 // =========================================================
-// 2. NUEVO: Integración con Microservicio PHP (Cotizador)
+// 3. API Calls Estandarizadas (Microservicio PHP)
 // =========================================================
 
-const PHP_API_URL = '/api/cotizar';
-
 /**
- * Envía los datos para solo CALCULAR (Previsualización)
+ * Envía los datos para solo CALCULAR (Previsualización).
  * @param {Object} data - { horas_tecnico: 8, items: [...] }
  */
 export const calcularCotizacion = async (data) => {
-  try {
-    const response = await fetch(`${PHP_API_URL}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) throw new Error('Error al calcular cotización');
-    return await response.json();
-  } catch (error) {
-    console.error('Error en calcularCotizacion:', error);
-    throw error;
-  }
+  const response = await phpApi.post('/api/cotizar', data);
+  return response.data;
 };
 
 /**
- * Envía los datos para GUARDAR y generar UUID
+ * Envía los datos para GUARDAR y generar UUID.
  * @param {Object} data - { tecnico_id, cliente_nombre, horas_tecnico, items... }
  */
 export const guardarCotizacion = async (data) => {
-  try {
-    const response = await fetch(`${PHP_API_URL}/guardar`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) throw new Error('Error al guardar cotización');
-    return await response.json();
-  } catch (error) {
-    console.error('Error en guardarCotizacion:', error);
-    throw error;
-  }
-};
-
-export const crearRecursoTecnico = async (nombre, unidad, precioTotal) => { // <-- CAMBIADO
-  const response = await fetch(`/api/recursos`, { // Asumimos que Nginx rutea /api/recursos (POST)
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    // Enviamos 'precio_total' en lugar de 'costo'
-    body: JSON.stringify({ nombre, unidad, precio_total: precioTotal }) // <-- CAMBIADO
-  });
-  return await response.json();
+  const response = await phpApi.post('/api/cotizar/guardar', data);
+  return response.data;
 };
 
 /**
- * Genera la URL para ver el PDF
+ * Crea un nuevo recurso/material personalizado por un técnico.
+ */
+export const crearRecursoTecnico = async (nombre, unidad, precioTotal) => {
+  const payload = { nombre, unidad, precio_total: precioTotal };
+  const response = await phpApi.post('/api/recursos', payload);
+  return response.data;
+};
+
+/**
+ * Genera la URL para ver el PDF.
  * @param {string} uuid 
  */
 export const obtenerUrlPdf = (uuid) => {
-  return `${PHP_API_URL}/pdf?uuid=${uuid}`;
+  // Esto no es una llamada de API, solo construye una URL, por lo que no necesita axios.
+  return `/api/cotizar/pdf?uuid=${uuid}`;
 };
 
 /**
- * ¡NUEVO!
  * Llama al backend de IA para obtener sugerencias de materiales.
  * @param {string[]} nombresMateriales - Un array de nombres, ej: ["Cable THW 12", "Contacto Duplex"]
  */
 export const obtenerSugerenciasIA = async (nombresMateriales) => {
   try {
-    const response = await fetch(`/api/ia/sugerir`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ materiales: nombresMateriales })
-    });
-    
-    if (!response.ok) {
-      // Si la API de IA falla, no rompemos la app, solo lo reportamos.
-      console.error("Error en la API de IA", await response.json());
-      return { status: 'error', sugerencias: [] };
-    }
-    
-    return await response.json(); // Devuelve { status: 'success', sugerencias: [...] }
+    const response = await phpApi.post('/api/ia/sugerir', { materiales: nombresMateriales });
+    return response.data;
   } catch (error) {
-    console.error('Error de conexión con la IA:', error);
+    // REGLA DE NEGOCIO: Si la IA falla, no se debe romper la aplicación.
+    // El interceptor ya ha logueado el error, aquí simplemente devolvemos un estado seguro.
     return { status: 'error', sugerencias: [] };
   }
 };
+
+/**
+ * Obtiene los contadores de cotizaciones por caso para un técnico específico.
+ * @param {string} tecnicoId - El ID del técnico.
+ */
 export const getCotizacionesCountsByTecnico = async (tecnicoId) => {
-  try {
-    const response = await fetch(`/api/cotizaciones/counts?tecnico_id=${tecnicoId}`);
-    if (!response.ok) {
-      throw new Error(`Error HTTP: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Error al obtener conteos de cotizaciones:', error);
-    throw error;
-  }
+  const response = await phpApi.get('/api/cotizaciones/counts', {
+    params: { tecnico_id: tecnicoId }
+  });
+  return response.data;
 };
 
 export const cerrarCasoManualmente = async (casoId) => {
