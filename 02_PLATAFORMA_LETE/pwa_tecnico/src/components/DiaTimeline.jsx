@@ -93,6 +93,7 @@ const DiaTimeline = ({ date }) => {
           ))}
 
           {citas.map(cita => {
+            // 1. La función que calcula el 'top' y 'height' sigue igual
             const start = dayjs(cita.start_datetime);
             const end = dayjs(cita.end_datetime);
 
@@ -100,19 +101,38 @@ const DiaTimeline = ({ date }) => {
             const durationInMinutes = end.diff(start, 'minute');
             const height = (durationInMinutes / 60) * HOUR_HEIGHT;
 
+            const style = {
+              ...appointmentCardStyles,
+              top: `${top}px`,
+              height: `${height}px`,
+            };
+
+            // 2. Definimos las clases dinámicas para el color
+            const tipoCaso = cita.caso?.tipo || 'default'; // ej: 'alto_consumo'
+            const cardClassName = `cita-card card-${tipoCaso}`; // -> "cita-card card-alto_consumo"
+
             return (
-              <div
-                key={cita.id}
-                style={{
-                  ...appointmentCardStyles,
-                  top: `${top}px`,
-                  height: `${height}px`,
-                }}
-              >
-                <strong>{cita.cliente_nombre}</strong>
-              </div>
+                <div
+                    key={cita.id}
+                    className={cardClassName} // <-- Clase dinámica
+                    style={style}
+                >
+                    {/* 3. Renderizamos los detalles del caso si existen */}
+                    {cita.caso ? (
+                        <>
+                            <strong>{cita.caso.cliente_nombre}</strong>
+                            <p>{dayjs(cita.start_datetime).format('h:mm A')} - {dayjs(cita.end_datetime).format('h:mm A')}</p>
+                            <p>{cita.caso.cliente_direccion}</p>
+                        </>
+                    ) : (
+                        <>
+                            <strong>Cita (sin caso vinculado)</strong>
+                            <p>{dayjs(cita.start_datetime).format('h:mm A')}</p>
+                        </>
+                    )}
+                </div>
             );
-          })}
+        })}
 
           {!isLoading && citas.length === 0 && (
              <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
