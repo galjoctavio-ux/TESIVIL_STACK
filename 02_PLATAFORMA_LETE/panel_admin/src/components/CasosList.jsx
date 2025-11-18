@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import api from '../apiService';
-import AsignarCasoModal from './AsignarCasoModal';
 
 const tableStyle = {
   width: '100%',
@@ -26,23 +25,10 @@ const tdStyle = {
   color: '#1E293B',
 };
 
-const actionButtonStyles = {
-  border: '1px solid #CBD5E1',
-  backgroundColor: 'transparent',
-  color: '#334155',
-  borderRadius: '6px',
-  padding: '6px 12px',
-  cursor: 'pointer',
-  marginRight: '8px',
-  fontSize: '14px',
-  transition: 'background-color 0.2s, color 0.2s',
-};
-
-function CasosList({ onDatosActualizados, onAgendarClick }) { // 1. Recibir 'onDatosActualizados'
+function CasosList() {
   const [casos, setCasos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [casoParaAsignar, setCasoParaAsignar] = useState(null);
 
   useEffect(() => {
     const fetchCasos = async () => {
@@ -59,14 +45,7 @@ function CasosList({ onDatosActualizados, onAgendarClick }) { // 1. Recibir 'onD
       }
     };
     fetchCasos();
-  }, []); // 2. Array vacío, el 'key' en Dashboard refresca
-
-  // 3. Esta función ahora llama a la prop correcta
-  const handleCasoAsignado = () => {
-    if (onDatosActualizados) {
-      onDatosActualizados(); // Llama a la función del Dashboard
-    }
-  };
+  }, []);
 
   if (isLoading) { return <div>Cargando lista de casos...</div>; }
   if (error) { return <div style={{ color: 'red' }}>{error}</div>; }
@@ -80,9 +59,9 @@ function CasosList({ onDatosActualizados, onAgendarClick }) { // 1. Recibir 'onD
             <th style={thStyle}>ID</th>
             <th style={thStyle}>Cliente</th>
             <th style={thStyle}>Dirección</th>
+            <th style={thStyle}>Tipo de Servicio</th>
             <th style={thStyle}>Estado</th>
             <th style={thStyle}>Técnico Asignado</th>
-            <th style={thStyle}>Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -94,36 +73,14 @@ function CasosList({ onDatosActualizados, onAgendarClick }) { // 1. Recibir 'onD
                 <td style={tdStyle}>{caso.id}</td>
                 <td style={tdStyle}>{caso.cliente_nombre}</td>
                 <td style={tdStyle}>{caso.cliente_direccion}</td>
+                <td style={tdStyle}>{caso.tipo}</td>
                 <td style={tdStyle}>{caso.status}</td>
                 <td style={tdStyle}>{caso.tecnico?.nombre || 'Sin asignar'}</td>
-                <td style={tdStyle}>
-                  <button>Ver</button>
-                  <button 
-                    onClick={() => setCasoParaAsignar(caso)}
-                    disabled={caso.status === 'completado'}
-                  >
-                    Asignar
-                  </button>
-                  <button
-                    onClick={() => onAgendarClick(caso)}
-                    disabled={caso.status !== 'asignado'}
-                  >
-                    Agendar
-                  </button>
-                </td>
               </tr>
             ))
           )}
         </tbody>
       </table>
-
-      {casoParaAsignar && (
-        <AsignarCasoModal
-          caso={casoParaAsignar}
-          onClose={() => setCasoParaAsignar(null)}
-          onCasoAsignado={handleCasoAsignado} // 4. Pasar la función
-        />
-      )}
     </div>
   );
 }
