@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   obtenerListadoCotizaciones,
   aplicarDescuento,
@@ -26,9 +26,17 @@ const CotizacionesList = () => {
   const [cotizacionAClonar, setCotizacionAClonar] = useState(null);
   const [cotizacionAAutorizar, setCotizacionAAutorizar] = useState(null);
 
+  const location = useLocation();
+
   useEffect(() => {
+    // Lee el parámetro 'search' de la URL al montar el componente
+    const params = new URLSearchParams(location.search);
+    const searchQuery = params.get('search');
+    if (searchQuery) {
+      setSearchTerm(searchQuery);
+    }
     cargarCotizaciones();
-  }, []);
+  }, [location.search]); // Se ejecuta si la URL cambia
 
   const cargarCotizaciones = async () => {
     setLoading(true);
