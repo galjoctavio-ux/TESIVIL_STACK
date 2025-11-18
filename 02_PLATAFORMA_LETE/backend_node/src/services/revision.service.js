@@ -1,12 +1,12 @@
 import { supabaseAdmin, supabaseKey } from './supabaseClient.js';
 import { Buffer } from 'buffer';
+import axios from 'axios';
 import { 
   calcularConsumoEquipos,
   detectarFugas,
   verificarSolar,
   generarDiagnosticosAutomaticos 
 } from './calculos.service.js';
-import { generarPDF } from './pdf.service.js';
 // ¡NUEVO! Importamos nuestro servicio de email
 import { enviarReportePorEmail } from './email.service.js';
 
@@ -103,44 +103,34 @@ export const processRevision = async (payload, tecnico) => {
           .eq('id', newRevisionId);
     }
 
-    // --- PASO 6: Generar y Subir PDF ---
-    console.log('Iniciando recopilación de datos para PDF...');
-    const { data: tecnicoData } = await supabaseAdmin
-      .from('profiles')
-      .select('nombre, firma_url')
-      .eq('id', tecnico.id)
-      .single();
+    // --- PASO 6: Delegar Generación de PDF a PHP ---
+    console.log(`Delegando la generación del PDF para la revisión ${newRevisionId} a PHP.`);
 
-    const datosParaPDF = {
-      cliente_nombre: casoData?.cliente_nombre,
-      cliente_direccion: casoData?.cliente_direccion, // Corregido: Usar la dirección del caso
-      cliente_email: revisionResult.cliente_email,
-      fecha_revision: revisionResult.fecha_revision,
-      tecnico_nombre: tecnicoData?.nombre,
-      revision: { ...revisionResult, firma_url: firmaUrl },
-      equipos: equiposCalculados,
-      firma_cliente_url: firmaUrl, // Renombrado para claridad
-      firma_tecnico_url: tecnicoData?.firma_url
-    };
+    const phpPdfEndpoint = process.env.PHP_PDF_ENDPOINT || 'http://localhost/lete/api/revisiones/generar_pdf_final';
 
-    const pdfBuffer = await generarPDF(datosParaPDF);
-    console.log('Buffer de PDF generado.');
+    try {
+        const response = await axios.post(phpPdfEndpoint, {
+            revision_id: newRevisionId
+        });
 
-    const pdfFilePath = `pdfs/reporte-revision-${newRevisionId}.pdf`;
-    const { error: pdfUploadError } = await supabaseAdmin.storage
-      .from('reportes')
-      .upload(pdfFilePath, pdfBuffer, { contentType: 'application/pdf' });
+        if (response.data && response.data.pdf_url) {
+            pdfUrl = response.data.pdf_url;
+            console.log('PDF generado por PHP en:', pdfUrl);
 
-    if (pdfUploadError) throw pdfUploadError;
-
-    const { data: pdfUrlData } = supabaseAdmin.storage.from('reportes').getPublicUrl(pdfFilePath);
-    pdfUrl = pdfUrlData.publicUrl;
-    console.log('PDF subido a:', pdfUrl);
-
-    await supabaseAdmin
-      .from('revisiones')
-      .update({ pdf_url: pdfUrl })
-      .eq('id', newRevisionId);
+            await supabaseAdmin
+                .from('revisiones')
+                .update({ pdf_url: pdfUrl })
+                .eq('id', newRevisionId);
+        } else {
+            console.warn('El servicio de PHP no devolvió una URL de PDF.', response.data);
+        }
+    } catch (axiosError) {
+        console.error('Error al llamar al servicio de PHP para generar el PDF:', axiosError.message);
+        if (axiosError.response) {
+            console.error('Data:', axiosError.response.data);
+            console.error('Status:', axiosError.response.status);
+        }
+    }
 
     // --- PASO 7: Enviar Email (¡NUEVO!) ---
     if (pdfUrl && revisionResult.cliente_email && casoData?.cliente_nombre) {
