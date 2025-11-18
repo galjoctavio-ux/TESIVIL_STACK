@@ -59,4 +59,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   margin-top: 4px;
-}
+}/* --- Estilos para los botones de acción de la cita --- */
+.cita-actions { margin-top: 8px; display: flex; flex-wrap: wrap; /* Permite que los botones bajen si no caben / gap: 8px; border-top: 1px solid rgba(100, 116, 139, 0.2); / Separador sutil */ padding-top: 6px; }
+.cita-icon-button { display: inline-flex; align-items: center; justify-content: center; background-color: rgba(255, 255, 255, 0.4); border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 6px; padding: 4px 6px; font-size: 1rem; /* Controla el tamaño del emoji / line-height: 1; cursor: pointer; color: #334155; / Color del emoji (texto) */ text-decoration: none; transition: background-color 0.2s ease; }
+.cita-icon-button:hover { background-color: rgba(255, 255, 255, 0.8); }
