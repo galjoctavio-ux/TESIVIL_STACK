@@ -129,3 +129,8 @@ export const cerrarCasoManualmente = async (casoId) => {
     throw error;
   }
 };
+
+export const getCasoById = async (id) => {
+  const response = await api.get(`/casos/${id}`);
+  return response.data;
+};
