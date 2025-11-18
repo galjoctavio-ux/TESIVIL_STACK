@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import RevisionForm from './pages/RevisionForm';
 import Cotizador from './pages/Cotizador';
 import AgendaPage from './pages/AgendaPage';
+import DetalleCaso from './pages/DetalleCaso';
 import './App.css';
 
 import ReloadPrompt from './components/ReloadPrompt';
@@ -54,6 +55,15 @@ function App() {
         />
         
         {/* La ruta antigua "/revision/:casoId" ya no es necesaria */}
+
+        <Route
+          path="/caso/:id"
+          element={
+            <ProtectedRoute>
+              <DetalleCaso />
+            </ProtectedRoute>
+          }
+        />
         
       </Routes>
     </>
