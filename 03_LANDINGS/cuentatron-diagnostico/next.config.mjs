@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Esta es la configuración clave para tu entorno
-  basePath: '/cuentatron/diagnostico-personalizado',
+  basePath: '/cuentatron/diagnostico',
 
   // Optimizamos la salida para PM2/Nginx
   output: 'standalone', 
