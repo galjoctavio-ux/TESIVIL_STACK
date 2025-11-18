@@ -1,5 +1,7 @@
 // src/controllers/agenda.controller.js
 import pool from '../services/eaDatabase.js';
+// ¡IMPORTANTE! Asegúrate de importar supabaseAdmin
+import { supabaseAdmin } from '../services/supabaseClient.js';
 
 /**
  * Verifica si un técnico tiene conflictos de agenda en un rango de fechas.
@@ -59,19 +61,20 @@ export const checkAvailability = async (req, res) => {
 
 /**
 * Obtiene todas las citas de un técnico para un día específico.
-* (VERSIÓN FINAL OPTIMIZADA)
+* (VERSIÓN ENRIQUECIDA CON DETALLES DE SUPABASE)
 */
 export const getAgendaPorDia = async (req, res) => {
-// 1. Obtenemos el ID del 'req.user' que inyectó el middleware 'requireAuth'
-const tecnico_id = req.user.ea_user_id; // <-- Usamos el ID de ea_users (ej: 23)
-const { fecha } = req.query; // Fecha en formato 'YYYY-MM-DD'
+const tecnico_id = req.user.ea_user_id; // Usamos el ID de E!A (ej: 23)
+const { fecha } = req.query;
 
 if (!fecha) {
 return res.status(400).json({ error: 'El parámetro "fecha" es requerido.' });
 }
 
 try {
-// 2. Preparamos el rango de fechas (esto usa los índices y es rápido)
+// ----------------------------------------------------
+// PASO 1: Obtener citas de Easy!Appointments (MySQL)
+// ----------------------------------------------------
 const fechaInicio = `${fecha} 00:00:00`;
 const fechaSiguiente = new Date(fecha);
 fechaSiguiente.setDate(fechaSiguiente.getDate() + 1);
@@ -79,69 +82,80 @@ const fechaFin = fechaSiguiente.toISOString().split('T')[0] + ' 00:00:00';
 
 const connection = await pool.getConnection();
 
-// 3. LA QUERY CORREGIDA:
-// - Eliminamos TODOS los LEFT JOINs.
-// - Seleccionamos los campos 'notes' y 'notas_estructuradas'.
 const sql = `
-SELECT
-id,
-start_datetime,
-end_datetime,
-notes,
-notas_estructuradas
+SELECT id, start_datetime, end_datetime, notes, notas_estructuradas
 FROM ea_appointments
-WHERE
-id_users_provider = ?
+WHERE id_users_provider = ?
 AND start_datetime >= ?
 AND start_datetime < ?
 ORDER BY start_datetime ASC;
 `;
-
 const params = [tecnico_id, fechaInicio, fechaFin];
-
 const [rows] = await connection.execute(sql, params);
 connection.release();
 
-// 4. PROCESAMIENTO EN JAVASCRIPT
-// Aquí es donde "encontramos" el caso_id
+// ----------------------------------------------------
+// PASO 2: Procesar citas y extraer caso_id (Como antes)
+// ----------------------------------------------------
 const citas = rows.map(cita => {
 let casoId = null;
-
-// Intento 1: Asumir que 'notas_estructuradas' es un JSON
 if (cita.notas_estructuradas) {
 try {
-// Asumimos que guardas algo como: {"caso_id": 123, "otro": "dato"}
 const structured = JSON.parse(cita.notas_estructuradas);
-if (structured.caso_id) {
-casoId = structured.caso_id;
+if (structured.caso_id) casoId = structured.caso_id;
+} catch (e) { /* No es JSON, no pasa nada */ }
 }
-} catch (e) {
-// No era un JSON válido, no hacemos nada.
-}
-}
-
-// Intento 2: Si no se encontró, buscar en 'notes' (menos probable)
-// Asumimos que guardas algo como "ID del Caso: C-45"
-if (!casoId && cita.notes) {
-const match = cita.notes.match(/ID del Caso: (\S+)/); // <-- AJUSTA ESTE REGEX SI ES NECESARIO
-if (match && match[1]) {
-casoId = match[1];
-}
-}
-
-// 5. Devolvemos el formato que el frontend espera
 return {
-id: cita.id,
+id: cita.id, // ID de la cita
 start_datetime: cita.start_datetime,
 end_datetime: cita.end_datetime,
-caso_id: casoId // Será null si no se encontró en ningún lado
+caso_id: casoId
 };
 });
 
-res.json(citas);
+// Si no hay citas, terminamos aquí
+if (citas.length === 0) {
+return res.json([]);
+}
+
+// ----------------------------------------------------
+// PASO 3: Enriquecer con datos de Supabase
+// ----------------------------------------------------
+
+// 3.1. Obtener la lista de IDs de casos (ej: [37, 42])
+const casoIds = citas.map(c => c.caso_id).filter(id => id !== null);
+
+// Si no hay IDs de casos, no consultamos Supabase
+if (casoIds.length === 0) {
+// Devolvemos las citas (sin detalles de caso)
+return res.json(citas.map(c => ({ ...c, caso: null })));
+}
+
+// 3.2. Consultar la tabla 'casos' en Supabase
+const { data: casosData, error: casosError } = await supabaseAdmin
+.from('casos')
+.select('id, cliente_nombre, cliente_direccion, tipo, status') // Traemos los campos que necesitamos
+.in('id', casoIds); // ¡Elige solo los casos de esta agenda!
+
+if (casosError) throw casosError;
+
+// 3.3. Crear un "Mapa" para cruzar datos fácilmente
+const casosMap = new Map(casosData.map(caso => [caso.id, caso]));
+
+// 3.4. Fusionar los datos de E!A (MySQL) con los de Casos (Supabase)
+const citasConDetalles = citas.map(cita => ({
+...cita, // Contiene id_cita, start_datetime, end_datetime, caso_id
+// Añadimos un objeto 'caso' con los detalles
+caso: casosMap.get(cita.caso_id) || null
+}));
+
+// ----------------------------------------------------
+// PASO 4: Enviar la respuesta completa
+// ----------------------------------------------------
+res.json(citasConDetalles);
 
 } catch (error) {
-console.error('Error al obtener la agenda por día:', error);
+console.error('Error al obtener la agenda enriquecida:', error);
 res.status(500).json({
 error: 'Error interno del servidor al obtener la agenda.',
 details: error.message
