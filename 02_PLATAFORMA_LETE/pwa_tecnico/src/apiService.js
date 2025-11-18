@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import axios from 'axios';
 
 const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -42,6 +43,11 @@ export const obtenerRecursos = async () => {
     // Relanzamos el error para que el componente (Cotizador.jsx) pueda atraparlo
     throw error;
   }
+};
+
+export const getAgendaPorDia = async (fecha) => {
+  const fechaFormateada = dayjs(fecha).format('YYYY-MM-DD');
+  return api.get('/agenda/por-dia', { params: { fecha: fechaFormateada } });
 };
 
 // =========================================================
