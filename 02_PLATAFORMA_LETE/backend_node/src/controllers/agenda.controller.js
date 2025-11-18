@@ -59,9 +59,11 @@ export const checkAvailability = async (req, res) => {
 
 /**
  * Obtiene todas las citas de un técnico para un día específico.
+ * (VERSIÓN OPTIMIZADA)
  */
 export const getAgendaPorDia = async (req, res) => {
-  const tecnico_id = req.user.id; // ID del técnico inyectado por requireAuth
+  // OBTENEMOS EL ID del 'req.user' que inyectó el middleware 'requireAuth'
+  const tecnico_id = req.user.id;
   const { fecha } = req.query; // Fecha en formato 'YYYY-MM-DD'
 
   if (!fecha) {
@@ -71,10 +73,18 @@ export const getAgendaPorDia = async (req, res) => {
   }
 
   try {
+    // 1. Preparamos el rango de fechas para que MySQL pueda usar índices
+    const fechaInicio = `${fecha} 00:00:00`;
+    // Calculamos el día siguiente
+    const fechaSiguiente = new Date(fecha);
+    fechaSiguiente.setDate(fechaSiguiente.getDate() + 1);
+    const fechaFin = fechaSiguiente.toISOString().split('T')[0] + ' 00:00:00';
+
     const connection = await pool.getConnection();
 
-    // La query busca todas las citas para el proveedor y la fecha especificada.
-    // Hacemos un LEFT JOIN con ea_appointments_cases para obtener el caso_id si existe.
+    // 2. LA QUERY OPTIMIZADA
+    //    - Se cambió DATE(a.start_datetime) = ?
+    //    - Por un rango con >= y <
     const sql = `
       SELECT
         a.id,
@@ -83,12 +93,15 @@ export const getAgendaPorDia = async (req, res) => {
         ac.caso_id
       FROM ea_appointments a
       LEFT JOIN ea_appointments_cases ac ON a.id = ac.appointment_id
-      WHERE a.id_users_provider = ?
-        AND DATE(a.start_datetime) = ?
+      WHERE
+        a.id_users_provider = ?
+        AND a.start_datetime >= ?  -- Inicio del día
+        AND a.start_datetime < ?   -- Antes del inicio del día siguiente
       ORDER BY a.start_datetime ASC;
     `;
 
-    const params = [tecnico_id, fecha];
+    // 3. Los parámetros ahora son 3
+    const params = [tecnico_id, fechaInicio, fechaFin];
 
     const [rows] = await connection.execute(sql, params);
     connection.release();
