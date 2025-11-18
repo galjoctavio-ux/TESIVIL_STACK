@@ -16,7 +16,8 @@
     "react-datepicker": "^8.9.0",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.5",
-    "react-signature-canvas": "^1.1.0-alpha.2"
+    "react-signature-canvas": "^1.1.0-alpha.2",
+    "swiper": "^12.0.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

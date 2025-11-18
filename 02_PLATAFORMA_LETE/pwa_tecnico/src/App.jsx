@@ -1,11 +1,10 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Login from './pages/Login';
-import CasosList from './pages/CasosList';
 import ProtectedRoute from './components/ProtectedRoute';
 import RevisionForm from './pages/RevisionForm';
 import Cotizador from './pages/Cotizador';
-import Agenda from './pages/Agenda'; // Import the new Agenda page
+import AgendaPage from './pages/AgendaPage';
 import './App.css';
 
 import ReloadPrompt from './components/ReloadPrompt';
@@ -30,7 +29,7 @@ function App() {
           path="/" // Set Agenda as the main protected route
           element={
             <ProtectedRoute>
-              <Agenda />
+              <AgendaPage />
             </ProtectedRoute>
           }
         />
@@ -42,14 +41,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route 
-          path="/casos" 
-          element={
-            <ProtectedRoute>
-              <CasosList />
-            </ProtectedRoute>
-          } 
-        />
+        {/* The /casos route is now deprecated, AgendaPage at root is the main view */}
 
         {/* --- 2. NUEVA RUTA PROTEGIDA: COTIZADOR --- */}
         <Route 
