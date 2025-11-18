@@ -31,21 +31,6 @@ const timeLabelStyles = {
     paddingRight: '10px',
   };
 
-const appointmentCardStyles = {
-  position: 'absolute',
-  left: '60px', // Align with the grid
-  right: '10px',
-  backgroundColor: 'rgba(59, 130, 246, 0.8)',
-  borderLeft: '4px solid #2563EB',
-  borderRadius: '4px',
-  color: 'white',
-  padding: '8px',
-  boxSizing: 'border-box',
-  fontSize: '14px',
-  overflow: 'hidden',
-  boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
-};
-
 const DiaTimeline = ({ date }) => {
   const [citas, setCitas] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,7 +87,6 @@ const DiaTimeline = ({ date }) => {
             const height = (durationInMinutes / 60) * HOUR_HEIGHT;
 
             const style = {
-              ...appointmentCardStyles,
               top: `${top}px`,
               height: `${height}px`,
             };
@@ -114,7 +98,9 @@ const DiaTimeline = ({ date }) => {
             return (
                 <div
                     key={cita.id}
-                    className={cardClassName} // <-- Clase dinámica
+                    // This line applies the dynamic classes from AgendaStyles.css
+                    // e.g., "cita-card card-alto_consumo"
+                    className={cardClassName}
                     style={style}
                 >
                     {/* 3. Renderizamos los detalles del caso si existen */}
@@ -122,7 +108,7 @@ const DiaTimeline = ({ date }) => {
                         <>
                             <strong>{cita.caso.cliente_nombre}</strong>
                             <p>{dayjs(cita.start_datetime).format('h:mm A')} - {dayjs(cita.end_datetime).format('h:mm A')}</p>
-                            <p>{cita.caso.cliente_direccion}</p>
+                            <p className="cita-direccion">{cita.caso.cliente_direccion}</p>
                         </>
                     ) : (
                         <>
