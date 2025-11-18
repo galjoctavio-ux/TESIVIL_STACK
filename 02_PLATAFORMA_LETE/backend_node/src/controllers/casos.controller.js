@@ -71,19 +71,27 @@ export const getCasos = async (req, res) => {
 // PUT /casos/:id (Asignar/Actualizar caso)
 export const updateCaso = async (req, res) => {
   const { id } = req.params;
-  const { tecnico_id, status } = req.body; // El admin enviará esto
-
-  if (!tecnico_id && !status) {
-    return res.status(400).json({ error: 'Se requiere "tecnico_id" o "status" para actualizar' });
-  }
+  // Extraemos todos los campos potencialmente actualizables
+  const { tecnico_id, status, cliente_nombre, cliente_direccion, cliente_telefono } = req.body;
 
   // Creamos el objeto de actualización dinámicamente
   const updates = {};
   if (tecnico_id) updates.tecnico_id = tecnico_id;
   if (status) updates.status = status;
+  if (cliente_nombre) updates.cliente_nombre = cliente_nombre;
+  if (cliente_direccion) updates.cliente_direccion = cliente_direccion;
+  if (cliente_telefono) updates.cliente_telefono = cliente_telefono;
 
-  // Si asignamos un técnico, cambiamos el status automáticamente
-  if (tecnico_id) updates.status = 'asignado';
+  // Validamos que al menos un campo se esté enviando
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'Se requiere al menos un campo para actualizar.' });
+  }
+
+  // Lógica de negocio: Si asignamos un técnico, el status cambia a 'asignado'
+  // Esto sobreescribe cualquier status que se haya enviado, asegurando consistencia.
+  if (tecnico_id) {
+    updates.status = 'asignado';
+  }
 
   try {
     const { data, error } = await supabaseAdmin

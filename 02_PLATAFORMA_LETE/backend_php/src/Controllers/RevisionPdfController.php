@@ -175,30 +175,68 @@ EOD;
     }
 
     /**
-     * Método de entrada para la ruta. Maneja el request y la respuesta JSON.
+     * Método de entrada para la ruta. Maneja request POST (JSON) y GET (Query Param).
      */
     public function generarPdfFinalDesdeRevision(): void {
+        // Intentar leer JSON Body (POST)
         $data = json_decode(file_get_contents('php://input'), true);
+        $revisionId = $data['revision_id'] ?? null;
+        $isGetRequest = $_SERVER['REQUEST_METHOD'] === 'GET';
 
-        if (!isset($data['revision_id'])) {
+        // Si no hay JSON y es GET, intentar leer Query Param
+        if (!$revisionId && $isGetRequest && isset($_GET['revision_id'])) {
+            $revisionId = $_GET['revision_id'];
+        }
+
+        if (!$revisionId) {
             http_response_code(400);
-            echo json_encode(['error' => 'Falta el revision_id.']);
+            // Distinguir respuesta para no romper API existente
+            if (!$isGetRequest) {
+                echo json_encode(['error' => 'Falta el revision_id.']);
+            } else {
+                echo 'Error: Falta el ID de la revisión.';
+            }
             return;
         }
 
         try {
-            $url = $this->generarYGuardarPdfRevision((int)$data['revision_id']);
-            if ($url) {
-                // El header Content-Type ya se establece en el enrutador principal
-                echo json_encode(['pdf_url' => $url]);
+            // La generación es la misma para ambos métodos
+            $relativeUrl = $this->generarYGuardarPdfRevision((int)$revisionId);
+
+            if ($relativeUrl) {
+                // Si es GET, servimos el PDF directamente para visualización en el navegador
+                if ($isGetRequest) {
+                    $filePath = __DIR__ . '/../../public/' . $relativeUrl;
+                    if (file_exists($filePath)) {
+                        header('Content-Type: application/pdf');
+                        header('Content-Disposition: inline; filename="' . basename($filePath) . '"');
+                        header('Content-Length: ' . filesize($filePath));
+                        readfile($filePath);
+                        exit; // Detenemos la ejecución para no enviar más output
+                    } else {
+                        http_response_code(404);
+                        echo 'Error: El archivo PDF generado no fue encontrado.';
+                        return;
+                    }
+                } else { // Si es POST, mantenemos la respuesta JSON
+                    echo json_encode(['pdf_url' => $relativeUrl]);
+                }
             } else {
                 http_response_code(500);
-                echo json_encode(['error' => 'No se pudo generar el PDF de la revisión.']);
+                if (!$isGetRequest) {
+                    echo json_encode(['error' => 'No se pudo generar el PDF de la revisión.']);
+                } else {
+                    echo 'Error: No se pudo generar el PDF de la revisión.';
+                }
             }
         } catch (Exception $e) {
             http_response_code(500);
             error_log("Error en generarPdfFinalDesdeRevision: " . $e->getMessage());
-            echo json_encode(['error' => 'Error interno del servidor al generar el PDF.']);
+            if (!$isGetRequest) {
+                echo json_encode(['error' => 'Error interno del servidor al generar el PDF.']);
+            } else {
+                echo 'Error interno del servidor al generar el PDF.';
+            }
         }
     }
 

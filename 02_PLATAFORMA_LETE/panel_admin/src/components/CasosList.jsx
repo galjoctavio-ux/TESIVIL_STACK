@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../apiService';
+import EditarCasoModal from './EditarCasoModal';
 
 const tableStyle = {
   width: '100%',
@@ -29,26 +31,53 @@ function CasosList() {
   const [casos, setCasos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCaso, setEditingCaso] = useState(null);
+
+  const fetchCasos = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await api.get('/casos');
+      setCasos(response.data);
+    } catch (err) {
+      console.error('Error al obtener los casos:', err);
+      setError('No se pudieron cargar los casos.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchCasos = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await api.get('/casos');
-        setCasos(response.data);
-      } catch (err) {
-        console.error('Error al obtener los casos:', err);
-        setError('No se pudieron cargar los casos.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchCasos();
   }, []);
 
+  const handleEditClick = (caso) => {
+    setEditingCaso(caso);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingCaso(null);
+  };
+
+  const handleSaveCaso = async (formData) => {
+    if (!editingCaso) return;
+    try {
+      await api.put(`/casos/${editingCaso.id}`, formData);
+      handleCloseModal();
+      fetchCasos(); // Recargar la lista
+    } catch (error) {
+      console.error("Error al guardar el caso:", error);
+      alert("Hubo un error al guardar los cambios.");
+    }
+  };
+
   if (isLoading) { return <div>Cargando lista de casos...</div>; }
   if (error) { return <div style={{ color: 'red' }}>{error}</div>; }
+
+  const VITE_PHP_API_URL = import.meta.env.VITE_PHP_API_BASE_URL || '/api';
 
   return (
     <div>
@@ -59,28 +88,50 @@ function CasosList() {
             <th style={thStyle}>ID</th>
             <th style={thStyle}>Cliente</th>
             <th style={thStyle}>Dirección</th>
-            <th style={thStyle}>Tipo de Servicio</th>
+            <th style={thStyle}>Tipo</th>
             <th style={thStyle}>Estado</th>
-            <th style={thStyle}>Técnico Asignado</th>
+            <th style={thStyle}>Técnico</th>
+            <th style={thStyle}>Acciones</th>
           </tr>
         </thead>
         <tbody>
           {casos.length === 0 ? (
-            <tr><td colSpan="6" style={tdStyle}>No hay casos para mostrar.</td></tr>
+            <tr><td colSpan="7" style={tdStyle}>No hay casos para mostrar.</td></tr>
           ) : (
             casos.map(caso => (
               <tr key={caso.id}>
                 <td style={tdStyle}>{caso.id}</td>
                 <td style={tdStyle}>{caso.cliente_nombre}</td>
                 <td style={tdStyle}>{caso.cliente_direccion}</td>
-                <td style={tdStyle}>{caso.tipo}</td>
+                <td style={tdStyle}>{caso.tipo || 'N/A'}</td>
                 <td style={tdStyle}>{caso.status}</td>
                 <td style={tdStyle}>{caso.tecnico?.nombre || 'Sin asignar'}</td>
+                <td style={tdStyle}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => handleEditClick(caso)} style={{ background: '#007bff', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}>✏️ Editar</button>
+                    <Link to={`/cotizaciones?search=${encodeURIComponent(caso.cliente_nombre)}`} style={{ background: '#28a745', color: 'white', textDecoration: 'none', padding: '5px 10px', borderRadius: '4px' }}>
+                      💰 Cotizaciones
+                    </Link>
+                    {caso.tipo === 'alto_consumo' && (
+                       <a href={`${VITE_PHP_API_URL}/revisiones/generar_pdf_final?revision_id=${caso.id}`} target="_blank" rel="noopener noreferrer" style={{ background: '#dc3545', color: 'white', textDecoration: 'none', padding: '5px 10px', borderRadius: '4px' }}>
+                        📄 PDF
+                      </a>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))
           )}
         </tbody>
       </table>
+      {editingCaso && (
+        <EditarCasoModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          caso={editingCaso}
+          onSave={handleSaveCaso}
+        />
+      )}
     </div>
   );
 }

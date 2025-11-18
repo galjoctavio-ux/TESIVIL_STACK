@@ -7,8 +7,6 @@ function ProtectedRoute({ children }) {
   const location = useLocation();
 
   if (isLoading) {
-    // Muestra 'Cargando...' mientras el AuthProvider
-    // revisa el localStorage
     return <div>Cargando sesión...</div>;
   }
 

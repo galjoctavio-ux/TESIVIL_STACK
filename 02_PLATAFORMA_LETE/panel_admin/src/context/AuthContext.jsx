@@ -15,16 +15,27 @@ export function AuthProvider({ children }) {
   // 3. Efecto de "Arranque"
   // Revisa localStorage al cargar la app
   useEffect(() => {
-    const storedToken = localStorage.getItem('authToken');
-    const storedUser = localStorage.getItem('user');
+    const validateToken = async () => {
+      const storedToken = localStorage.getItem('authToken');
+      if (storedToken) {
+        try {
+          api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+          const response = await api.get('/auth/me');
+          setUser(response.data);
+          setToken(storedToken);
+        } catch (error) {
+          console.error('Token validation failed:', error);
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('user');
+          delete api.defaults.headers.common['Authorization'];
+        }
+      }
+      // This MUST be outside the if block to ensure loading completes
+      // even if no token is found.
+      setIsLoading(false);
+    };
 
-    if (storedToken && storedUser) {
-      setUser(JSON.parse(storedUser));
-      setToken(storedToken);
-      // ¡Importante! Configura Axios para usar este token en TODAS las peticiones
-      api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-    }
-    setIsLoading(false); // Terminamos de cargar
+    validateToken();
   }, []);
 
   // 4. Función de Login
