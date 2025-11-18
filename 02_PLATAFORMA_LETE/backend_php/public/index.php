@@ -14,7 +14,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // 2. CARGAR TODOS LOS CONTROLADORES
 require_once __DIR__ . '/../src/Controllers/CotizacionController.php';
-require_once __DIR__ . '/../src/Controllers/PdfController.php'; 
+require_once __DIR__ . '/../src/Controllers/PdfController.php';
+require_once __DIR__ . '/../src/Controllers/RevisionPdfController.php';
 require_once __DIR__ . '/../src/Controllers/XmlController.php';
 require_once __DIR__ . '/../src/Controllers/AiController.php';
 require_once __DIR__ . '/../src/Controllers/ConfigController.php'; // <--- ¡ESTA LÍNEA ES VITAL!
@@ -221,6 +222,25 @@ elseif ($uri === '/api/admin/cotizacion/guardar-cambios' && $_SERVER['REQUEST_ME
     header("Content-Type: application/json; charset=UTF-8");
     $controller = new CotizacionController();
     $controller->actualizarCotizacion();
+}
+
+// --- BLOQUE F: REVISIONES ---
+elseif ($uri === '/api/revisiones/generar_pdf_final' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header("Content-Type: application/json; charset=UTF-8");
+    $controller = new RevisionPdfController();
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (isset($data['revision_id'])) {
+        $url = $controller->generarYGuardarPdfRevision((int)$data['revision_id']);
+        if ($url) {
+            echo json_encode(['pdf_url' => $url]);
+        } else {
+            http_response_code(500);
+            echo json_encode(['error' => 'No se pudo generar el PDF de la revisión.']);
+        }
+    } else {
+        http_response_code(400);
+        echo json_encode(['error' => 'Falta el revision_id.']);
+    }
 }
 
 // RUTA NO ENCONTRADA
