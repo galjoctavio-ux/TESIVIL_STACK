@@ -242,23 +242,32 @@ class CotizacionController {
             http_response_code(500); echo "Error: " . $e->getMessage();
         }
     }
-    public function autorizarCotizacion(): void {
-        $input = json_decode(file_get_contents('php://input'), true);
-        if (empty($input['id'])) {
-             http_response_code(400); echo json_encode(['error' => 'Falta ID']); return;
-        }
-        try {
-            $this->calculosService->actualizarEstadoCotizacion((int)$input['id'], 'ENVIADA');
-            $datos = $this->calculosService->obtenerDatosEnvio((int)$input['id']);
-            if ($datos) {
-                $resend = new ResendService();
-                $resend->enviarCotizacion($datos['uuid'], $datos['cliente_email'], $datos['cliente_nombre'], (int)$input['id']);
-            }
-            echo json_encode(['status' => 'success', 'message' => 'Cotización autorizada y enviada al cliente.']);
-        } catch (Exception $e) {
-            http_response_code(500); echo json_encode(['error' => 'Error interno: ' . $e->getMessage()]);
-        }
-    }
+public function autorizarCotizacion(): void {
+$input = json_decode(file_get_contents('php://input'), true);
+if (empty($input['id'])) {
+http_response_code(400);
+echo json_encode(['error' => 'Falta ID']);
+return;
+}
+
+try {
+// 1. Cambiamos el estado a EN_EJECUCION para indicar que el técnico va a trabajar
+// Esto desbloquea el flujo visual en el Panel Admin.
+$this->calculosService->actualizarEstadoCotizacion((int)$input['id'], 'EN_EJECUCION');
+
+// 2. NO enviamos correo aquí. La autorización es un proceso interno administrativo.
+// El PDF ya se envió cuando se creó la cotización originalmente.
+
+echo json_encode([
+'status' => 'success',
+'message' => 'Cotización autorizada. Estado actualizado a EN_EJECUCION.'
+]);
+
+} catch (Exception $e) {
+http_response_code(500);
+echo json_encode(['error' => 'Error interno: ' . $e->getMessage()]);
+}
+}
     public function rechazarCotizacion(): void {
         $input = json_decode(file_get_contents('php://input'), true);
         if (empty($input['id'])) {
