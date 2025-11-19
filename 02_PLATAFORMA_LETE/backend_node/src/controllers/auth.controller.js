@@ -59,17 +59,16 @@ export const loginUsuario = async (req, res) => {
   }
 };
 
-// Nueva función para obtener los datos del usuario autenticado
 export const getMe = async (req, res) => {
-  try {
-    // El middleware `requireAuth` ya ha verificado el token y
-    // ha adjuntado los datos del usuario a `req.user`.
-    // Simplemente devolvemos esa información.
-    res.status(200).json(req.user);
-  } catch (error) {
-    // Este bloque de error es más bien una salvaguarda,
-    // ya que si `requireAuth` falla, no llegará aquí.
-    console.error('Error en getMe controller:', error.message);
-    res.status(500).json({ error: 'Error interno del servidor al recuperar datos de usuario.' });
+  // El middleware ya validó el token y puso el usuario en req.user
+  if (!req.user) {
+    return res.status(401).json({ error: 'No autenticado' });
   }
+  // Devolvemos los datos básicos del usuario
+  res.status(200).json({
+    id: req.user.id,
+    email: req.user.email,
+    rol: req.user.rol,
+    nombre: req.user.nombre || req.user.email
+  });
 };
