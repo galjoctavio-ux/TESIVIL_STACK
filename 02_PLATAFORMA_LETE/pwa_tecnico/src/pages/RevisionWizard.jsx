@@ -38,40 +38,43 @@ const RevisionWizard = () => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    // Step 1
+    caso_id: null,
+    // Step 1: Generales
     cliente_email: '',
-    cliente_nombre: 'Cliente de Ejemplo',
-    cliente_direccion: 'Dirección de Ejemplo',
-    // Step 2
+    // Step 2: Medidor y C.C.
     tipo_servicio: 'Monofásico',
+    tipo_medidor: 'Digital',
+    giro_medidor: 'Regular',
     sello_cfe: true,
+    condicion_base_medidor: 'Bueno',
+    edad_instalacion: '0-10 años',
+    cantidad_circuitos: 1,
+    condiciones_cc: 'Bueno',
+    observaciones_cc: '',
     tornillos_flojos: false,
-    conexiones_sulfatadas: false,
-    base_sobrecalentada: false,
     capacidad_vs_calibre: true,
-    // Step 3
-    voltaje_f1_n: '',
-    amperaje_f1: '',
-    voltaje_f2_n: '',
-    amperaje_f2: '',
-    voltaje_f1_f2: '',
-    voltaje_f3_n: '',
-    amperaje_f3: '',
-    voltaje_f2_f3: '',
-    voltaje_f1_f3: '',
-    amperaje_neutro: '',
-    amperaje_inyeccion_paneles: '',
-    voltaje_inyeccion_paneles: '',
-    // Step 4
-    se_puede_apagar_todo: null,
-    fuga_f1: '',
-    fuga_f2: '',
-    fuga_f3: '',
-    // Step 5
+    // Step 3: Mediciones
+    voltaje_medido: 127.0,
+    corriente_red_f1: 0,
+    corriente_red_f2: 0,
+    corriente_red_f3: 0,
+    corriente_red_n: 0,
+    corriente_paneles_f1: 0,
+    corriente_paneles_f2: 0,
+    corriente_paneles_f3: 0,
+    cantidad_paneles: 0,
+    watts_por_panel: 0,
+    paneles_antiguedad_anos: 0,
+    // Step 4: Fugas
+    se_puede_apagar_todo: false,
+    corriente_fuga_f1: 0,
+    corriente_fuga_f2: 0,
+    corriente_fuga_f3: 0,
+    // Step 5: Equipos
     equiposData: [],
-    // Step 6
+    // Step 6: Cierre
     causas_alto_consumo: [],
-    recomendaciones: '',
+    recomendaciones_tecnico: '',
     firmaBase64: null,
   });
 

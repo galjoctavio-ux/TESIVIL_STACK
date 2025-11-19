@@ -1,24 +1,42 @@
-import React from 'react';
-import { cn } from '../../../utils/cn.js';
 
-const InputCard = ({ label, id, error, className, ...props }) => {
+import React from 'react';
+
+const InputCard = ({
+  label,
+  name,
+  value,
+  onChange,
+  unit,
+  placeholder,
+  type = 'text',
+  isTextarea = false,
+}) => {
+  const commonProps = {
+    id: name,
+    name,
+    value,
+    onChange,
+    placeholder,
+    className: 'w-full p-3 bg-gray-50 border-gray-200 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500',
+  };
+
   return (
-    <div className={cn("w-full", className)}>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-600 mb-1">
+    <div className="bg-white shadow-md rounded-xl p-4">
+      <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">
         {label}
       </label>
-      <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200">
-        <input
-          id={id}
-          className="w-full bg-gray-100 text-gray-800 placeholder-gray-400 rounded-md py-3 px-4 border-none focus:ring-2 focus:ring-blue-500 focus:outline-none transition-shadow"
-          {...props}
-        />
+      <div className="relative">
+        {isTextarea ? (
+          <textarea {...commonProps} rows="4" />
+        ) : (
+          <input {...commonProps} type={type} />
+        )}
+        {unit && (
+          <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm text-gray-500">
+            {unit}
+          </span>
+        )}
       </div>
-      {error && (
-        <p className="mt-2 text-xs font-semibold text-red-500">
-          {error}
-        </p>
-      )}
     </div>
   );
 };

@@ -2,12 +2,11 @@ import React, { useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 
 const CAUSAS_ALTO_CONSUMO = [
-  "Fuga en Sanitario",
-  "Fuga en Tubería",
-  "Fuga en Tinaco/Cisterna",
-  "Equipos Obsoletos",
-  "Malos Hábitos",
-  "Otro",
+  "Fugas de corriente en la instalación eléctrica.",
+  "Uso excesivo de electrodomésticos de alto consumo.",
+  "Equipos en mal estado que consumen más de lo normal.",
+  "Malas prácticas, como dejar luces y aparatos encendidos innecesariamente.",
+  "Fallas en otras instalaciones.",
 ];
 
 const Step6_Resumen = ({ formData, updateFormData }) => {
@@ -26,7 +25,7 @@ const Step6_Resumen = ({ formData, updateFormData }) => {
   };
 
   const handleRecomendacionesChange = (e) => {
-    updateFormData({ recomendaciones: e.target.value });
+    updateFormData({ recomendaciones_tecnico: e.target.value });
   };
 
   const clearSignature = () => {
@@ -64,13 +63,13 @@ const Step6_Resumen = ({ formData, updateFormData }) => {
       </div>
 
       <div>
-        <label htmlFor="recomendaciones" className="text-lg font-bold text-gray-800">Recomendaciones Finales</label>
+        <label htmlFor="recomendaciones_tecnico" className="text-lg font-bold text-gray-800">Recomendaciones Finales</label>
         <textarea
-          id="recomendaciones"
+          id="recomendaciones_tecnico"
           rows="5"
           className="mt-3 w-full p-3 bg-white rounded-lg shadow-sm border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
           placeholder="Describe las acciones recomendadas para el cliente..."
-          value={formData.recomendaciones || ''}
+          value={formData.recomendaciones_tecnico || ''}
           onChange={handleRecomendacionesChange}
         />
       </div>

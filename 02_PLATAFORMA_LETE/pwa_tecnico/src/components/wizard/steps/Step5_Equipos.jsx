@@ -18,7 +18,7 @@ const Step5_Equipos = ({ formData, setFormData }) => {
     const nuevoEquipo = {
       id: Date.now(),
       nombre_equipo: 'Refrigerador',
-      ubicacion: '', // Added field for UI
+      nombre_personalizado: '',
       amperaje_medido: 1.0,
       tiempo_uso: 1,
       unidad_tiempo: 'Horas/Día',
@@ -84,12 +84,12 @@ const Step5_Equipos = ({ formData, setFormData }) => {
               </div>
 
               {/* --- Ubicación --- */}
-               <InputCard
-                  label="Ubicación"
-                  value={equipo.ubicacion || ''}
-                  onChange={(e) => handleEquipoChange(equipo.id, 'ubicacion', e.target.value)}
-                  placeholder="Ej: Cocina"
-                  compact // assuming InputCard has a compact variant
+              <InputCard
+                label="Ubicación (Nombre Personalizado)"
+                value={equipo.nombre_personalizado || ''}
+                onChange={(e) => handleEquipoChange(equipo.id, 'nombre_personalizado', e.target.value)}
+                placeholder="Ej: Cocina, Sala"
+                compact
               />
 
               {/* --- Grid de 2 Columnas --- */}
@@ -106,10 +106,36 @@ const Step5_Equipos = ({ formData, setFormData }) => {
                   label="Tiempo de Uso"
                   value={equipo.tiempo_uso}
                   onChange={(e) => handleEquipoChange(equipo.id, 'tiempo_uso', e.target.value)}
-                  unit="hrs/día"
                   type="number"
                   compact
                 />
+              </div>
+
+              {/* --- Fila Adicional para Selects --- */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500">Unidad</label>
+                  <select
+                    value={equipo.unidad_tiempo}
+                    onChange={(e) => handleEquipoChange(equipo.id, 'unidad_tiempo', e.target.value)}
+                    className="w-full p-2 bg-gray-50 border rounded-lg mt-1 text-sm"
+                  >
+                    <option>Horas/Día</option>
+                    <option>Horas/Semana</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500">Estado</label>
+                  <select
+                    value={equipo.estado_equipo}
+                    onChange={(e) => handleEquipoChange(equipo.id, 'estado_equipo', e.target.value)}
+                    className="w-full p-2 bg-gray-50 border rounded-lg mt-1 text-sm"
+                  >
+                    <option>Bueno</option>
+                    <option>Regular</option>
+                    <option>Malo</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>

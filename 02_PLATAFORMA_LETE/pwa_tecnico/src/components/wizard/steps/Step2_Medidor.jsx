@@ -1,83 +1,85 @@
 import React from 'react';
-// As per instructions, we assume these reusable components exist.
-// We will imagine their paths, a real implementation would require knowing the exact paths.
 import BigToggle from '../ui/BigToggle';
+import InputCard from '../ui/InputCard'; // Assuming this exists for text/number inputs
+import SelectCard from '../ui/SelectCard'; // Assuming a reusable select component
 
-const Step2_Medidor = ({ formData, setFormData }) => {
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+const Step2_Medidor = ({ formData, updateFormData }) => {
+  const handleChange = (field, value) => {
+    updateFormData({ [field]: value });
   };
 
-  const handleToggle = (name) => {
-    setFormData(prev => ({
-      ...prev,
-      [name]: !prev[name]
-    }));
-  };
-
-  // From legacy code: This logic is based on a derived value,
-  // but for the component we just check the boolean prop.
-  const { capacidad_vs_calibre } = formData;
+  const {
+    tipo_servicio,
+    sello_cfe,
+    condicion_base_medidor,
+    tornillos_flojos,
+    capacidad_vs_calibre
+  } = formData;
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-6 text-center">Medidor y Acometida</h2>
+    <div className="space-y-6">
+      <SelectCard
+        label="Tipo de Servicio"
+        name="tipo_servicio"
+        value={tipo_servicio}
+        onChange={(e) => handleChange('tipo_servicio', e.target.value)}
+        options={[
+          'Monofásico',
+          '2F+Neutro',
+          '2F+N con Paneles',
+          'Trifásico',
+          'Trifásico con Paneles',
+        ]}
+      />
 
-      <div className="space-y-4">
-        <div>
-          <label htmlFor="tipo_servicio" className="block text-sm font-medium text-gray-700 mb-1">
-            Tipo de Servicio
-          </label>
-          <select
-            id="tipo_servicio"
-            name="tipo_servicio"
-            value={formData.tipo_servicio || ''}
-            onChange={handleChange}
-            className="w-full p-3 bg-white border rounded-xl shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-          >
-            <option value="">Seleccione...</option>
-            <option value="Monofásico">Monofásico</option>
-            <option value="2F+Neutro">2F+Neutro (Bifásico)</option>
-            <option value="2F+N con Paneles">2F+N con Paneles</option>
-            <option value="Trifásico">Trifásico</option>
-            <option value="Trifásico con Paneles">Trifásico con Paneles</option>
-          </select>
+      <BigToggle
+        label="¿Cuenta con Sello CFE?"
+        enabled={sello_cfe}
+        onChange={(val) => handleChange('sello_cfe', val)}
+      />
+
+      {!sello_cfe && (
+        <SelectCard
+          label="Condición Base Medidor (Si NO hay sello)"
+          name="condicion_base_medidor"
+          value={condicion_base_medidor}
+          onChange={(e) => handleChange('condicion_base_medidor', e.target.value)}
+          options={['Bueno', 'Regular', 'Malo']}
+        />
+      )}
+
+      <BigToggle
+        label="¿Tornillos Flojos?"
+        enabled={tornillos_flojos}
+        onChange={(val) => handleChange('tornillos_flojos', val)}
+      />
+
+      {tornillos_flojos && (
+        <div className="p-4 bg-red-100 text-red-800 rounded-lg">
+          <p className="font-bold">¡Atención! Aprieta los tornillos para asegurar una buena conexión y evitar fallas.</p>
         </div>
+      )}
 
-        {/* Boolean toggles */}
-        <BigToggle
-          label="¿Sello CFE en buen estado?"
-          enabled={formData.sello_cfe || false}
-          onChange={() => handleToggle('sello_cfe')}
-        />
-        <BigToggle
-          label="¿Tornillos de terminales flojos?"
-          enabled={formData.tornillos_flojos || false}
-          onChange={() => handleToggle('tornillos_flojos')}
-        />
-        <BigToggle
-          label="¿Conexiones sulfatadas?"
-          enabled={formData.conexiones_sulfatadas || false}
-          onChange={() => handleToggle('conexiones_sulfatadas')}
-        />
-         <BigToggle
-          label="¿Base de medidor sobrecalentada?"
-          enabled={formData.base_sobrecalentada || false}
-          onChange={() => handleToggle('base_sobrecalentada')}
-        />
+      <BigToggle
+        label="¿Capacidad del Interruptor vs Calibre Correcto?"
+        enabled={capacidad_vs_calibre}
+        onChange={(val) => handleChange('capacidad_vs_calibre', val)}
+      />
 
-        {/* Conditional Alert */}
-        {capacidad_vs_calibre === false && (
-          <div className="bg-red-100 text-red-700 p-4 rounded-lg mt-4" role="alert">
-            <p className="font-bold">¡Alerta de Capacidad!</p>
-            <p>El calibre del conductor de la acometida no parece ser el adecuado para la capacidad del interruptor principal. Se requiere revisión.</p>
-          </div>
-        )}
-      </div>
+      {!capacidad_vs_calibre && (
+        <div className="p-4 bg-red-100 text-red-800 rounded-lg">
+          <p className="font-bold">¡PELIGRO! Riesgo de Incendio. El calibre del conductor no corresponde a la capacidad del interruptor.</p>
+        </div>
+      )}
+
+      <InputCard
+        label="Observaciones del Centro de Carga"
+        name="observaciones_cc"
+        value={formData.observaciones_cc || ''}
+        onChange={(e) => handleChange('observaciones_cc', e.target.value)}
+        placeholder="Ej: Se sobrecalienta, huele a quemado..."
+        isTextarea
+      />
     </div>
   );
 };
