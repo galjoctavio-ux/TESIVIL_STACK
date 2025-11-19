@@ -17,23 +17,7 @@ export const processRevision = async (payload, tecnico) => {
     throw new Error('Faltan "revisionData" o "equiposData"');
   }
 
-  // --- Normalización de Datos ---
-  // Mapeamos los nombres de campos antiguos a los nuevos para compatibilidad
-  const {
-    fuga_f1,
-    fuga_f2,
-    fuga_f3,
-    voltaje_fn,
-    ...otrosDatos
-  } = revisionData;
-
-  const revisionDataCorregida = {
-    ...otrosDatos,
-    corriente_fuga_f1: fuga_f1,
-    corriente_fuga_f2: fuga_f2,
-    corriente_fuga_f3: fuga_f3,
-    voltaje_medido: voltaje_fn,
-  };
+  const revisionDataCorregida = { ...revisionData };
 
 
   console.log(`Procesando revisión para el caso ${revisionDataCorregida.caso_id} por el técnico ${tecnico.email}`);
