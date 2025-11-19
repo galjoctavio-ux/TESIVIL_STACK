@@ -2,7 +2,6 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../Services/CalculosService.php';
-require_once __DIR__ . '/../Services/GeminiService.php';
 require_once __DIR__ . '/../Services/ResendService.php';
 
 use Dompdf\Dompdf;
@@ -10,7 +9,6 @@ use Dompdf\Options;
 
 class RevisionPdfController {
     private CalculosService $service;
-    private GeminiService $gemini;
     private ResendService $resend;
     private string $apiKey;
 
@@ -21,7 +19,6 @@ class RevisionPdfController {
         }
         $this->apiKey = $_ENV['GEMINI_API_KEY'];
         $this->service = new CalculosService();
-        $this->gemini = new GeminiService();
         $this->resend = new ResendService();
     }
 
@@ -220,8 +217,8 @@ class RevisionPdfController {
     }
 
     private function generarDiagnosticoIA(array $datosRevision): string {
-        $apiKey = $this->apiKey;
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey;
+        $model = 'gemini-2.5-flash';
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . $this->apiKey;
 
         $datosParaIA = [
             'servicio' => $datosRevision['mediciones']['tipo_servicio'],
@@ -238,8 +235,13 @@ class RevisionPdfController {
             'recomendaciones_tecnico' => $datosRevision['recomendaciones_tecnico']
         ];
         $datosJson = json_encode($datosParaIA);
-        $prompt = "Eres un ingeniero eléctrico experto de 'Luz en tu Espacio'. Analiza los siguientes datos JSON de una revisión: $datosJson. Tu tarea es redactar un párrafo de 'Diagnóstico Ejecutivo' para el cliente final. Debe ser profesional, tranquilizador pero honesto. Basándote en los datos: 1. Menciona el hallazgo más crítico (ej. 'tornillos flojos', 'fuga alta', o 'equipos en mal estado'). 2. Explica brevemente qué significa (ej. 'lo cual representaba un riesgo de seguridad'). 3. Menciona las recomendaciones clave del técnico si las hay. 4. Concluye positivamente. Responde SÓLO con el párrafo de diagnóstico. No uses markdown.";
-        $data = ['contents' => [['parts' => [['text' => $prompt]]]], 'generationConfig' => ['temperature' => 0.4, 'maxOutputTokens' => 8000]];
+
+        $prompt = "Analiza los siguientes datos JSON de una revisión: {$datosJson}. Redacta un párrafo de 'Diagnóstico Ejecutivo' profesional y tranquilizador. Menciona el hallazgo más crítico, su significado, las recomendaciones y concluye positivamente. Responde únicamente con el texto del diagnóstico, sin preámbulos, sin markdown y sin títulos.";
+
+        $data = [
+            'contents' => [['parts' => [['text' => $prompt]]]],
+            'generationConfig' => ['temperature' => 0.4, 'maxOutputTokens' => 8000]
+        ];
 
         try {
             $ch = curl_init($url);
@@ -249,16 +251,24 @@ class RevisionPdfController {
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             $response = curl_exec($ch);
+
             if ($response === false) {
-                error_log("cURL Error: " . curl_error($ch));
+                error_log("cURL Error en generarDiagnosticoIA: " . curl_error($ch));
                 curl_close($ch);
                 return 'Se realizó una inspección detallada de sus instalaciones para verificar el correcto funcionamiento y seguridad.';
             }
             curl_close($ch);
+
             $json = json_decode($response, true);
-            return trim($json['candidates'][0]['content']['parts'][0]['text'] ?? 'No se pudo generar el diagnóstico.');
+
+            if (empty($json) || empty($json['candidates'][0]['content']['parts'][0]['text'])) {
+                error_log("Respuesta inesperada o vacía de la API de Gemini: " . $response);
+                return 'Se realizó una inspección detallada de sus instalaciones para verificar el correcto funcionamiento y seguridad.';
+            }
+
+            return trim($json['candidates'][0]['content']['parts'][0]['text']);
         } catch (Exception $e) {
-            error_log("Exception in IA call: " . $e->getMessage());
+            error_log("Exception en generarDiagnosticoIA: " . $e->getMessage());
             return 'Se realizó una inspección detallada de sus instalaciones para verificar el correcto funcionamiento y seguridad de sus conexiones.';
         }
     }
