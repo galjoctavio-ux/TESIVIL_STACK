@@ -58,3 +58,16 @@ export const loginUsuario = async (req, res) => {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
+
+export const getMe = async (req, res) => { // El middleware ya validó el token y puso el usuario en req.user
+  if (!req.user) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+  // Devolvemos los datos básicos del usuario
+  res.status(200).json({
+    id: req.user.id,
+    email: req.user.email,
+    rol: req.user.rol,
+    nombre: req.user.nombre || req.user.email
+  });
+};
