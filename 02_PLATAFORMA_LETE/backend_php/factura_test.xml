@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" Version="4.0">
-    <cfdi:Emisor Rfc="PEL123456XA1" Nombre="PROVEEDOR ELECTRICO DEL NORTE SA DE CV" />
-    <cfdi:Conceptos>
-        <cfdi:Concepto NoIdentificacion="CABLE-THW-12-ROJO" Descripcion="CABLE THW CALIBRE 12 ROJO 100M" ValorUnitario="1500.00" />
-        <cfdi:Concepto NoIdentificacion="CINTA-AISLAR-3M" Descripcion="CINTA DE AISLAR 3M" ValorUnitario="45.50" />
-    </cfdi:Conceptos>
-</cfdi:Comprobante>
