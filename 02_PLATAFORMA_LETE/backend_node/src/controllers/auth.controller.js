@@ -72,3 +72,16 @@ export const getMe = async (req, res) => {
     nombre: req.user.nombre || req.user.email
   });
 };
+
+export const getMe = async (req, res) => {
+  // Si llega aquí, el middleware requireAuth ya validó el token
+  if (!req.user) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+  res.status(200).json({
+    id: req.user.id,
+    email: req.user.email,
+    rol: req.user.rol,
+    nombre: req.user.nombre || req.user.email
+  });
+};
