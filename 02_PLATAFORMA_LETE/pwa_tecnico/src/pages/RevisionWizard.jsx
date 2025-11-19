@@ -1,16 +1,24 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
-import InputCard from '../components/wizard/ui/InputCard';
-import BigToggle from '../components/wizard/ui/BigToggle';
-import PhotoUpload from '../components/wizard/ui/PhotoUpload';
 import { AnimatePresence, motion } from 'framer-motion';
+import api from '../apiService';
 
-// Mock de los pasos para demostración
+// Importar los pasos reales
+import Step1_Generales from '../components/wizard/steps/Step1_Generales';
+import Step2_Medidor from '../components/wizard/steps/Step2_Medidor';
+import Step3_Mediciones from '../components/wizard/steps/Step3_Mediciones';
+import Step4_Fugas from '../components/wizard/steps/Step4_Fugas';
+import Step5_Equipos from '../components/wizard/steps/Step5_Equipos';
+import Step6_Resumen from '../components/wizard/steps/Step6_Resumen';
+
 const steps = [
-  { id: 'welcome', title: 'Bienvenida', component: WelcomeStep },
-  { id: 'leak-check', title: 'Revisión de Fugas', component: LeakCheckStep },
-  { id: 'photos', title: 'Evidencia Fotográfica', component: PhotosStep },
-  { id: 'summary', title: 'Resumen y Firma', component: SummaryStep },
+  { id: 'generales', title: 'Datos Generales', component: Step1_Generales },
+  { id: 'medidor', title: 'Revisión Medidor', component: Step2_Medidor },
+  { id: 'mediciones', title: 'Mediciones', component: Step3_Mediciones },
+  { id: 'fugas', title: 'Revisión de Fugas', component: Step4_Fugas },
+  { id: 'equipos', title: 'Equipos de Consumo', component: Step5_Equipos },
+  { id: 'resumen', title: 'Resumen y Firma', component: Step6_Resumen },
 ];
 
 const ProgressBar = ({ current, total }) => {
@@ -26,11 +34,45 @@ const ProgressBar = ({ current, total }) => {
 };
 
 const RevisionWizard = () => {
+  const navigate = useNavigate();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    hasLeaks: null,
-    leakDescription: '',
-    leakPhoto: null,
+    // Step 1
+    cliente_email: '',
+    cliente_nombre: 'Cliente de Ejemplo',
+    cliente_direccion: 'Dirección de Ejemplo',
+    // Step 2
+    tipo_servicio: 'Monofásico',
+    sello_cfe: true,
+    tornillos_flojos: false,
+    conexiones_sulfatadas: false,
+    base_sobrecalentada: false,
+    capacidad_vs_calibre: true,
+    // Step 3
+    voltaje_f1_n: '',
+    amperaje_f1: '',
+    voltaje_f2_n: '',
+    amperaje_f2: '',
+    voltaje_f1_f2: '',
+    voltaje_f3_n: '',
+    amperaje_f3: '',
+    voltaje_f2_f3: '',
+    voltaje_f1_f3: '',
+    amperaje_neutro: '',
+    amperaje_inyeccion_paneles: '',
+    voltaje_inyeccion_paneles: '',
+    // Step 4
+    se_puede_apagar_todo: null,
+    fuga_f1: '',
+    fuga_f2: '',
+    fuga_f3: '',
+    // Step 5
+    equiposData: [],
+    // Step 6
+    causas_alto_consumo: [],
+    recomendaciones: '',
+    firmaBase64: null,
   });
 
   const goToNext = () => {
@@ -49,13 +91,39 @@ const RevisionWizard = () => {
     setFormData(prev => ({ ...prev, ...newData }));
   };
 
+  const handleSubmit = async () => {
+    if (!formData.cliente_email) {
+      alert("El correo del cliente es obligatorio.");
+      setCurrentStepIndex(0);
+      return;
+    }
+
+    setIsSubmitting(true);
+    const { equiposData, firmaBase64, ...revisionData } = formData;
+    const payload = {
+      revisionData,
+      equiposData: equiposData || [],
+      firmaBase64,
+    };
+
+    try {
+      await api.post('/revisiones', payload);
+      alert('Revisión enviada con éxito');
+      navigate('/casos');
+    } catch (error) {
+      console.error('Error al enviar la revisión:', error);
+      alert('Hubo un error al enviar la revisión. Por favor, inténtalo de nuevo.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const CurrentStepComponent = steps[currentStepIndex].component;
   const currentStepTitle = steps[currentStepIndex].title;
   const isLastStep = currentStepIndex === steps.length - 1;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Header Fijo */}
       <header className="sticky top-0 z-10 w-full bg-white/80 backdrop-blur-sm shadow-sm">
         <div className="max-w-md mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
@@ -77,7 +145,6 @@ const RevisionWizard = () => {
         </div>
       </header>
 
-      {/* Cuerpo del Wizard con scroll */}
       <main className="flex-grow overflow-y-auto pb-32">
         <div className="max-w-md mx-auto p-4">
           <AnimatePresence mode="wait">
@@ -88,90 +155,25 @@ const RevisionWizard = () => {
               exit={{ opacity: 0, x: -50 }}
               transition={{ duration: 0.3 }}
             >
-              <CurrentStepComponent formData={formData} updateFormData={updateFormData} />
+              <CurrentStepComponent formData={formData} setFormData={setFormData} updateFormData={updateFormData} />
             </motion.div>
           </AnimatePresence>
         </div>
       </main>
 
-      {/* Footer Fijo */}
       <footer className="sticky bottom-0 z-10 w-full bg-white border-t border-gray-200">
         <div className="max-w-md mx-auto p-4">
           <button
-            onClick={goToNext}
-            className="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transform transition-transform duration-200 active:scale-95"
+            onClick={isLastStep ? handleSubmit : goToNext}
+            disabled={isSubmitting}
+            className="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transform transition-transform duration-200 active:scale-95 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {isLastStep ? 'Finalizar Revisión' : 'Siguiente'}
+            {isSubmitting ? 'Enviando...' : (isLastStep ? 'Finalizar Revisión' : 'Siguiente')}
           </button>
         </div>
       </footer>
     </div>
   );
 };
-
-
-// --- Componentes de Pasos (Ejemplos) ---
-
-function WelcomeStep() {
-  return (
-    <div className="text-center py-12">
-      <h2 className="text-2xl font-bold mb-2">Iniciemos la Revisión</h2>
-      <p className="text-gray-600">Sigue los pasos para completar el diagnóstico.</p>
-    </div>
-  )
-}
-
-function LeakCheckStep({ formData, updateFormData }) {
-  return (
-    <div className="space-y-6">
-      <BigToggle
-        label="¿Detectaste fugas de agua?"
-        value={formData.hasLeaks}
-        onChange={(value) => updateFormData({ hasLeaks: value })}
-      />
-      {formData.hasLeaks && (
-        <InputCard
-          label="Describe la fuga encontrada"
-          id="leak-description"
-          placeholder="Ej: Fuga en la tubería del lavabo"
-          value={formData.leakDescription}
-          onChange={(e) => updateFormData({ leakDescription: e.target.value })}
-        />
-      )}
-    </div>
-  );
-}
-
-function PhotosStep({ formData, updateFormData }) {
-  return (
-     <div className="space-y-6">
-       <PhotoUpload
-        label="Foto de la Fuga"
-        photo={formData.leakPhoto}
-        onUpload={(photoData) => updateFormData({ leakPhoto: photoData })}
-        onClear={() => updateFormData({ leakPhoto: null })}
-      />
-      {/* Añadir más cargas de fotos si es necesario */}
-    </div>
-  )
-}
-
-function SummaryStep({ formData }) {
-  return (
-    <div className="space-y-4">
-       <h2 className="text-xl font-bold border-b pb-2">Resumen</h2>
-       <p><strong>Fugas:</strong> {formData.hasLeaks ? 'Sí' : 'No'}</p>
-       {formData.hasLeaks && <p><strong>Descripción:</strong> {formData.leakDescription}</p>}
-       {formData.leakPhoto && (
-         <div>
-           <strong>Evidencia:</strong>
-           <img src={formData.leakPhoto} alt="Evidencia de fuga" className="mt-2 rounded-xl shadow-md"/>
-         </div>
-       )}
-       <p className="text-center pt-4 text-gray-500">Aquí iría la firma del cliente.</p>
-    </div>
-  )
-}
-
 
 export default RevisionWizard;

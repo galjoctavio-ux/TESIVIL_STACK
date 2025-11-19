@@ -1,48 +1,37 @@
 import React from 'react';
-import { Mail } from 'lucide-react';
-import InfoCard from '../ui/InfoCard';
 import InputCard from '../ui/InputCard';
+import InfoCard from '../ui/InfoCard';
 
-const Step1_Generales = ({ formData, setFormData }) => {
-  // Mock data for demonstration purposes
-  const clientData = {
-    name: 'Juan Perez',
-    address: 'Av. Siempre Viva 742',
-  };
+const Step1_Generales = ({ formData, updateFormData }) => {
+  const { cliente_email, cliente_nombre, cliente_direccion } = formData;
 
   const handleEmailChange = (e) => {
-    setFormData({
-      ...formData,
-      email: e.target.value,
-    });
+    updateFormData({ cliente_email: e.target.value });
   };
 
-  // Simple email validation for demonstration
-  const isEmailValid = () => {
-    if (!formData.email) return true; // Not invalid if empty
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
-  };
+  const hasClientInfo = cliente_nombre || cliente_direccion;
 
   return (
-    <div>
-      <InfoCard title="Datos del Cliente">
-        <p className="font-semibold text-lg">{clientData.name}</p>
-        <p className="text-gray-500">{clientData.address}</p>
-      </InfoCard>
+    <div className="space-y-6">
+      {hasClientInfo && (
+        <InfoCard>
+          <div className="space-y-2">
+            <h3 className="font-bold text-gray-800">Información del Cliente</h3>
+            {cliente_nombre && <p className="text-sm text-gray-600"><strong>Nombre:</strong> {cliente_nombre}</p>}
+            {cliente_direccion && <p className="text-sm text-gray-600"><strong>Dirección:</strong> {cliente_direccion}</p>}
+          </div>
+        </InfoCard>
+      )}
 
       <InputCard
-        label="Correo Electrónico del Cliente"
-        icon={<Mail size={24} />}
-        error={!isEmailValid() ? 'Por favor, introduce un correo válido.' : null}
-      >
-        <input
-          type="email"
-          placeholder="ejemplo@correo.com"
-          className="w-full bg-transparent outline-none text-lg text-gray-800"
-          value={formData.email || ''}
-          onChange={handleEmailChange}
-        />
-      </InputCard>
+        id="client-email"
+        label="Correo del Cliente (Obligatorio)"
+        type="email"
+        placeholder="ejemplo@correo.com"
+        value={cliente_email || ''}
+        onChange={handleEmailChange}
+        required
+      />
     </div>
   );
 };
