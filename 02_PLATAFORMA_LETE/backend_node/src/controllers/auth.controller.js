@@ -58,3 +58,18 @@ export const loginUsuario = async (req, res) => {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
+
+// Nueva función para obtener los datos del usuario autenticado
+export const getMe = async (req, res) => {
+  try {
+    // El middleware `requireAuth` ya ha verificado el token y
+    // ha adjuntado los datos del usuario a `req.user`.
+    // Simplemente devolvemos esa información.
+    res.status(200).json(req.user);
+  } catch (error) {
+    // Este bloque de error es más bien una salvaguarda,
+    // ya que si `requireAuth` falla, no llegará aquí.
+    console.error('Error en getMe controller:', error.message);
+    res.status(500).json({ error: 'Error interno del servidor al recuperar datos de usuario.' });
+  }
+};
