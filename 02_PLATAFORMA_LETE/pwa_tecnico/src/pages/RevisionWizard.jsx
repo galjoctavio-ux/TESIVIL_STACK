@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import api from '../apiService';
@@ -35,6 +35,7 @@ const ProgressBar = ({ current, total }) => {
 
 const RevisionWizard = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -77,6 +78,12 @@ const RevisionWizard = () => {
     recomendaciones_tecnico: '',
     firmaBase64: null,
   });
+
+  useEffect(() => {
+    if (id) {
+      setFormData(prev => ({ ...prev, caso_id: id }));
+    }
+  }, [id]);
 
   const goToNext = () => {
     if (currentStepIndex < steps.length - 1) {
