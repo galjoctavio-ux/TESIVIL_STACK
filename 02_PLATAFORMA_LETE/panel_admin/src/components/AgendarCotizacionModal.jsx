@@ -43,8 +43,9 @@ const AgendarCotizacionModal = ({ cotizacion, onClose, onConfirm }) => {
         tecnico_id: tecnicoId,
         fecha_inicio: fechaInicio,
         fecha_fin: fechaFin,
-        cliente_nombre: cotizacion.cliente_nombre,
-        cliente_direccion: cotizacion.cliente_direccion,
+        // Corregimos aquí para evitar enviar nulos o vacíos
+        cliente_nombre: cotizacion.cliente_nombre || "Cliente Sin Nombre",
+        cliente_direccion: cotizacion.cliente_direccion || "Dirección Pendiente / Mostrador",
       });
 
       onConfirm();
