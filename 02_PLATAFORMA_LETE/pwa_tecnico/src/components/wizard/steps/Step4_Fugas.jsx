@@ -31,8 +31,8 @@ const Step4_Fugas = ({ formData, updateFormData }) => {
               <h3 className="font-bold text-gray-700">🔬 Medición de Fugas</h3>
               <InputCard
                   label="Fuga a Tierra (F1)"
-                  name="fuga_f1"
-                  value={formData.fuga_f1 || ''}
+                  name="corriente_fuga_f1"
+                  value={formData.corriente_fuga_f1 || ''}
                   onChange={handleInputChange}
                   unit="A"
                   type="number"
@@ -41,8 +41,8 @@ const Step4_Fugas = ({ formData, updateFormData }) => {
               {showF2 && (
                   <InputCard
                       label="Fuga a Tierra (F2)"
-                      name="fuga_f2"
-                      value={formData.fuga_f2 || ''}
+                      name="corriente_fuga_f2"
+                      value={formData.corriente_fuga_f2 || ''}
                       onChange={handleInputChange}
                       unit="A"
                       type="number"
@@ -52,8 +52,8 @@ const Step4_Fugas = ({ formData, updateFormData }) => {
               {showF3 && (
                   <InputCard
                       label="Fuga a Tierra (F3)"
-                      name="fuga_f3"
-                      value={formData.fuga_f3 || ''}
+                      name="corriente_fuga_f3"
+                      value={formData.corriente_fuga_f3 || ''}
                       onChange={handleInputChange}
                       unit="A"
                       type="number"
