@@ -69,7 +69,7 @@ const Step5_Equipos = ({ formData, updateFormData }) => {
                 placeholder="Ej. Sala, Cocina, Recámara principal"
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InputCard
                   label="Amperaje"
                   name="amperaje_medido"
@@ -91,13 +91,13 @@ const Step5_Equipos = ({ formData, updateFormData }) => {
                       value={equipo.tiempo_uso}
                       onChange={(e) => handleEquipoChange(equipo.id, e.target.name, e.target.value)}
                       type="number"
-                      className="w-full p-3 bg-gray-50 border-gray-200 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      className="flex-1 min-w-0 w-full p-3 bg-gray-50 border-gray-200 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                     />
                     <select
                       name="unidad_tiempo"
                       value={equipo.unidad_tiempo}
                       onChange={(e) => handleEquipoChange(equipo.id, e.target.name, e.target.value)}
-                      className="p-3 bg-gray-50 border-gray-200 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-32 p-3 bg-gray-50 border-gray-200 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                     >
                       <option>Horas/Día</option>
                       <option>Horas/Semana</option>
