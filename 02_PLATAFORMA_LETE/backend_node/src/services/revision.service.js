@@ -17,19 +17,38 @@ export const processRevision = async (payload, tecnico) => {
     throw new Error('Faltan "revisionData" o "equiposData"');
   }
 
-  console.log(`Procesando revisión para el caso ${revisionData.caso_id} por el técnico ${tecnico.email}`);
+  // --- Normalización de Datos ---
+  // Mapeamos los nombres de campos antiguos a los nuevos para compatibilidad
+  const {
+    fuga_f1,
+    fuga_f2,
+    fuga_f3,
+    voltaje_fn,
+    ...otrosDatos
+  } = revisionData;
+
+  const revisionDataCorregida = {
+    ...otrosDatos,
+    corriente_fuga_f1: fuga_f1,
+    corriente_fuga_f2: fuga_f2,
+    corriente_fuga_f3: fuga_f3,
+    voltaje_medido: voltaje_fn,
+  };
+
+
+  console.log(`Procesando revisión para el caso ${revisionDataCorregida.caso_id} por el técnico ${tecnico.email}`);
 
   let casoData; // (¡NUEVO!) La necesitamos en 2 sitios, la declaramos aquí
   let pdfUrl = null; // (¡NUEVO!) Declarada aquí
 
   try {
     // --- PASO 1: Ejecutar TODOS los cálculos ---
-    const voltajeMedido = revisionData.voltaje_medido;
+    const voltajeMedido = revisionDataCorregida.voltaje_medido;
     const equiposCalculados = calcularConsumoEquipos(equiposData, voltajeMedido);
-    const diagnosticoFuga = detectarFugas(revisionData);
-    const diagnosticoSolar = verificarSolar(revisionData);
+    const diagnosticoFuga = detectarFugas(revisionDataCorregida);
+    const diagnosticoSolar = verificarSolar(revisionDataCorregida);
     const diagnosticos = generarDiagnosticosAutomaticos(
-      revisionData, 
+      revisionDataCorregida,
       equiposCalculados, 
       diagnosticoFuga, 
       diagnosticoSolar
@@ -40,7 +59,7 @@ export const processRevision = async (payload, tecnico) => {
     const { data: revisionResult, error: revisionError } = await supabaseAdmin
       .from('revisiones')
       .insert({ 
-          ...revisionData,
+          ...revisionDataCorregida,
           tecnico_id: tecnico.id, // ¡AÑADIDO! Asociamos la revisión con el técnico.
           diagnosticos_automaticos: diagnosticos
       })
@@ -70,11 +89,11 @@ export const processRevision = async (payload, tecnico) => {
     const { data: casoUpdated, error: casoError } = await supabaseAdmin
       .from('casos')
       .update({ status: 'completado' })
-      .eq('id', revisionData.caso_id)
+      .eq('id', revisionDataCorregida.caso_id)
       .select('cliente_nombre, cliente_direccion') // Obtenemos nombre y dirección
       .single();
 
-    if (casoError) console.warn(`Error al actualizar caso ${revisionData.caso_id}:`, casoError.message);
+    if (casoError) console.warn(`Error al actualizar caso ${revisionDataCorregida.caso_id}:`, casoError.message);
     casoData = casoUpdated; // Guardamos los datos del caso
 
     // --- PASO 5: Procesar Firma ---
@@ -144,7 +163,7 @@ export const processRevision = async (payload, tecnico) => {
       console.warn('Faltan datos (pdfUrl, email o nombre) para enviar el correo.');
     }
 
-    console.log(`Revisión ${newRevisionId} guardada. Caso ${revisionData.caso_id} completado.`);
+    console.log(`Revisión ${newRevisionId} guardada. Caso ${revisionDataCorregida.caso_id} completado.`);
 
     return {
       message: `Revisión guardada. ${equiposProcesados} equipos. ${diagnosticos.length} diagnósticos.`,
