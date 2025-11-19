@@ -5,9 +5,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 // Cargar bootstrap para variables de entorno
 require_once __DIR__ . '/../config/bootstrap.php';
 
-// Cargar manualmente la librería JWT y el Middleware
-require_once __DIR__ . '/../src/Firebase/JWT/JWT.php';
-require_once __DIR__ . '/../src/Firebase/JWT/Key.php';
+// Cargar Middleware
 require_once __DIR__ . '/../src/Middleware/AuthMiddleware.php';
 
 // 1. CONFIGURACIÓN DE CORS Y HEADERS
