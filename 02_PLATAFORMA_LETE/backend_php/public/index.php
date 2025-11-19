@@ -2,6 +2,14 @@
 // Cargar todas las librerías (Composer)
 require_once __DIR__ . '/../vendor/autoload.php';
 
+// Cargar bootstrap para variables de entorno
+require_once __DIR__ . '/../config/bootstrap.php';
+
+// Cargar manualmente la librería JWT y el Middleware
+require_once __DIR__ . '/../src/Firebase/JWT/JWT.php';
+require_once __DIR__ . '/../src/Firebase/JWT/Key.php';
+require_once __DIR__ . '/../src/Middleware/AuthMiddleware.php';
+
 // 1. CONFIGURACIÓN DE CORS Y HEADERS
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH");
@@ -38,40 +46,43 @@ foreach ($routes as $route) {
         continue;
     }
 
+    $uriMatches = false;
+    $matches = [];
+
     if ($isRegex) {
         if (preg_match($pattern, $uri, $matches)) {
             // Eliminar el match completo para pasar solo los parámetros
             array_shift($matches);
-
-            $controllerName = $route['controller'];
-            $action = $route['action'];
-
-            header("Content-Type: application/json; charset=UTF-8");
-            $controller = new $controllerName();
-            // Llamar al método con los parámetros capturados
-            call_user_func_array([$controller, $action], $matches);
-
-            $routeFound = true;
-            break;
+            $uriMatches = true;
         }
     } else {
         // Manejo de rutas estáticas, incluyendo aquellas con query string
         $uriWithoutQuery = strtok($uri, '?');
         if ($uriWithoutQuery === $pattern) {
-            $controllerName = $route['controller'];
-            $action = $route['action'];
-
-            // Establecer header aquí para evitar duplicación
-            if ($action !== 'exportarMaterialesTxt' && $action !== 'generarPdfFromUuid') {
-                header("Content-Type: application/json; charset=UTF-8");
-            }
-
-            $controller = new $controllerName();
-            $controller->$action();
-
-            $routeFound = true;
-            break;
+            $uriMatches = true;
         }
+    }
+
+    if ($uriMatches) {
+        // >>> APLICAR MIDDLEWARE A RUTAS PROTEGIDAS <<<
+        if (strpos($uri, '/api/admin/') === 0) {
+            App\Middleware\AuthMiddleware::handle();
+        }
+
+        $controllerName = $route['controller'];
+        $action = $route['action'];
+
+        // Establecer header aquí para evitar duplicación
+        if ($action !== 'exportarMaterialesTxt' && $action !== 'generarPdfFromUuid') {
+            header("Content-Type: application/json; charset=UTF-8");
+        }
+
+        $controller = new $controllerName();
+        // Llamar al método con los parámetros capturados (si los hay)
+        call_user_func_array([$controller, $action], $matches);
+
+        $routeFound = true;
+        break;
     }
 }
 
