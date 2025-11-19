@@ -26,6 +26,10 @@ const Step4_Fugas = ({ formData, updateFormData }) => {
 
       {se_puede_apagar_todo && (
         <div className="space-y-4">
+            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mt-4" role="alert">
+                <p className="font-bold">Instrucción:</p>
+                <p>Desconecta y apaga todo y mide la corriente en los cables de entrada.</p>
+            </div>
             <InputCard
                 label="Fuga a Tierra (F1)"
                 name="fuga_f1"

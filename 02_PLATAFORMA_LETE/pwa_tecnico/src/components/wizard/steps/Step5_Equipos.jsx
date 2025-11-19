@@ -1,14 +1,8 @@
 import React from 'react';
+import { Trash2 } from 'lucide-react';
 
 // Assuming InputCard exists for consistency
 import InputCard from '../ui/InputCard';
-
-// A simple Icon component for the delete button
-const XIcon = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
 
 
 const Step5_Equipos = ({ formData, setFormData }) => {
@@ -66,7 +60,7 @@ const Step5_Equipos = ({ formData, setFormData }) => {
               className="absolute top-2 right-2 text-red-500 hover:text-red-700 p-1 bg-red-100 rounded-full"
               aria-label="Eliminar equipo"
             >
-              <XIcon className="h-4 w-4" />
+              <Trash2 className="h-4 w-4" />
             </button>
 
             {/* --- Contenido de la Tarjeta --- */}
