@@ -11,8 +11,10 @@ const Step5_Equipos = ({ formData, updateFormData }) => {
     const newEquipo = {
       id: Date.now(), // Simple unique ID for the session
       nombre_equipo: 'Refrigerador',
+      nombre_personalizado: '',
       amperaje_medido: '',
       tiempo_uso: '',
+      unidad_tiempo: 'Horas/Día',
       estado_equipo: 'Bueno'
     };
     updateFormData({ equiposData: [...equipos, newEquipo] });
@@ -59,6 +61,14 @@ const Step5_Equipos = ({ formData, updateFormData }) => {
                 options={equipoOptions}
               />
 
+              <InputCard
+                label={equipo.nombre_equipo === 'Otro' ? "Nombre Personalizado" : "Ubicación / Detalle"}
+                name="nombre_personalizado"
+                value={equipo.nombre_personalizado}
+                onChange={(e) => handleEquipoChange(equipo.id, e.target.name, e.target.value)}
+                placeholder="Ej. Sala, Cocina, Recámara principal"
+              />
+
               <div className="grid grid-cols-2 gap-4">
                 <InputCard
                   label="Amperaje"
@@ -68,14 +78,33 @@ const Step5_Equipos = ({ formData, updateFormData }) => {
                   unit="A"
                   type="number"
                 />
-                <InputCard
-                  label="Tiempo (hrs/día)"
-                  name="tiempo_uso"
-                  value={equipo.tiempo_uso}
-                  onChange={(e) => handleEquipoChange(equipo.id, e.target.name, e.target.value)}
-                  unit="hrs"
-                  type="number"
-                />
+
+                {/* Custom layout for Time + Frequency */}
+                <div className="bg-white shadow-md rounded-xl p-4">
+                  <label htmlFor={`tiempo_uso_${equipo.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                    Tiempo de Uso
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      id={`tiempo_uso_${equipo.id}`}
+                      name="tiempo_uso"
+                      value={equipo.tiempo_uso}
+                      onChange={(e) => handleEquipoChange(equipo.id, e.target.name, e.target.value)}
+                      type="number"
+                      className="w-full p-3 bg-gray-50 border-gray-200 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <select
+                      name="unidad_tiempo"
+                      value={equipo.unidad_tiempo}
+                      onChange={(e) => handleEquipoChange(equipo.id, e.target.name, e.target.value)}
+                      className="p-3 bg-gray-50 border-gray-200 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option>Horas/Día</option>
+                      <option>Horas/Semana</option>
+                    </select>
+                  </div>
+                </div>
+
               </div>
 
               <SelectCard
