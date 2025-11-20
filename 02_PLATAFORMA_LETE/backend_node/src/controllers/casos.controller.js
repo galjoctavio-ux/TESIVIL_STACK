@@ -200,6 +200,10 @@ export const createCasoFromCotizacion = async (req, res) => {
 
     // 4. Insertar Cita en Easy!Appointments
     // Notas: is_unavailable = 0 (Cita real), id_services = NULL (o pon un ID si es estricto)
+    // --- CONFIGURA AQUÍ TUS IDs REALES ---
+    const EA_SERVICE_ID = 1;   // <--- PON AQUÍ EL ID QUE VISTE EN EL PASO 1
+    const EA_CUSTOMER_ID = 21;  // <--- PON AQUÍ EL ID DEL CLIENTE (GENÉRICO) QUE OBTUVISTE EN EL PASO 2
+    // -------------------------------------
     const eaQuery = `
       INSERT INTO ea_appointments 
       (book_datetime, start_datetime, end_datetime, notes, hash, is_unavailable, id_users_provider, id_users_customer, id_services)
