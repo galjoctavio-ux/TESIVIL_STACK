@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto'; // <--- Importamos SOLO lo que necesitamos
 import { supabaseAdmin } from '../services/supabaseClient.js';
 import eaPool from '../services/eaDatabase.js'; // --- AÑADIDO: Importar la conexión a E!A ---
 
@@ -195,7 +196,7 @@ export const createCasoFromCotizacion = async (req, res) => {
     if (casoError) throw new Error('Error al crear el caso en Supabase: ' + casoError.message);
 
     // 3. Generar Hash para Easy!Appointments (Obligatorio)
-    const hash = crypto.randomBytes(16).toString('hex');
+    const hash = randomBytes(16).toString('hex');
 
     // 4. Insertar Cita en Easy!Appointments
     // Notas: is_unavailable = 0 (Cita real), id_services = NULL (o pon un ID si es estricto)
