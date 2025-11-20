@@ -167,16 +167,17 @@ export const createCasoFromCotizacion = async (req, res) => {
     // (Necesitamos traducir el ID de Google/Auth al ID numérico de E!A)
     const { data: perfilTecnico, error: errorPerfil } = await supabaseAdmin
       .from('profiles')
-      .select('ea_id')
+      .select('ea_user_id')
       .eq('id_externo', tecnico_id)
       .single();
 
-    if (errorPerfil || !perfilTecnico?.ea_id) {
-       return res.status(400).json({ error: 'El técnico seleccionado no está sincronizado con la agenda (Falta ea_id).' });
+    // Verificamos usando el nombre correcto de la columna
+    if (errorPerfil || !perfilTecnico?.ea_user_id) {
+       console.error("Error perfil:", errorPerfil, perfilTecnico);
+       return res.status(400).json({ error: 'El técnico no está sincronizado con la agenda (Falta ea_user_id).' });
     }
     
-    const idProvider = perfilTecnico.ea_id; // Este es el ID que necesita la BD de E!A
-
+    const idProvider = perfilTecnico.ea_user_id; // <--- CAMBIO AQUÍ
     // 2. Crear Caso en Supabase
     const { data: newCaso, error: casoError } = await supabaseAdmin
       .from('casos')

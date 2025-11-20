@@ -3,51 +3,33 @@ import { supabaseAdmin, supabaseKey } from '../services/supabaseClient.js';
 import eaPool from '../services/eaDatabase.js'; // <-- Ya lo tenías
 import bcrypt from 'bcryptjs';               // <-- ¡NUEVO!
 
-// --- getTecnicos (Sin cambios) ---
+// --- getTecnicos (OPTIMIZADO Y CORREGIDO) ---
 export const getTecnicos = async (req, res) => {
-  // ... (Tu función getTecnicos existente va aquí, no cambia)
-  // ... (Me aseguro de incluirla por si acaso, es la del archivo que subiste)
   try {
-    console.log('Obteniendo lista de técnicos (con IDs de E!A)...');
-    const { data: profilesData, error: profilesError } = await supabaseAdmin
+    console.log('Obteniendo lista de técnicos desde perfiles...');
+    
+    // 1. Consultamos directo a Supabase (¡Mucho más rápido!)
+    // Pedimos explícitamente el ID (UUID) y el ID de E!A
+    const { data: profiles, error } = await supabaseAdmin
       .from('profiles')
-      .select('id, nombre')
+      .select('id, nombre, ea_user_id') // <--- OJO: Usamos el nombre real de tu columna
       .eq('rol', 'tecnico');
-    if (profilesError) throw profilesError;
-    let allUsers = [];
-    let page = 1;
-    let totalPages = 1;
-    do {
-      const { data: usersResponse, error: usersError } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 50 });
-      if (usersError) throw usersError;
-      if (usersResponse.users) allUsers.push(...usersResponse.users);
-      if (page === 1) {
-        const totalUsers = usersResponse.total || (usersResponse.users?.length || 0);
-        totalPages = Math.ceil(totalUsers / 50);
-      }
-      page++;
-    } while (page <= totalPages);
-    const sql = "SELECT id, email FROM ea_users WHERE email IS NOT NULL";
-    const [eaUsers] = await eaPool.query(sql);
-    const emailToEaIdMap = new Map();
-    eaUsers.forEach(user => {
-      emailToEaIdMap.set(user.email.toLowerCase(), user.id);
-    });
-    const tecnicos = profilesData.map(profile => {
-      const authUser = allUsers.find(u => u.id === profile.id);
-      const email = authUser ? authUser.email.toLowerCase() : null;
-      const ea_id = email ? emailToEaIdMap.get(email) : null; 
-      return {
-        id_supabase: profile.id,
-        id_ea: ea_id,
-        nombre: profile.nombre,
-        email: authUser ? authUser.email : 'Email no encontrado',
-      };
-    }).filter(t => t.id_ea !== null); 
-    console.log(`Técnicos procesados y sincronizados: ${tecnicos.length}`);
+
+    if (error) throw error;
+
+    // 2. Mapeamos para que el Frontend reciba exactamente lo que espera
+    const tecnicos = profiles.map(profile => ({
+      id: profile.id,            // <--- ¡ESTO ARREGLA EL ERROR 400! (Envía el UUID)
+      nombre: profile.nombre,    // Nombre para mostrar en el Select
+      ea_id: profile.ea_user_id, // Enviamos también el ID de E!A por si acaso
+      sincronizado: !!profile.ea_user_id // Flag útil para saber si está listo para agendar
+    }));
+
+    console.log(`Técnicos encontrados: ${tecnicos.length}`);
     res.status(200).json(tecnicos);
+
   } catch (error) {
-    console.error('Error completo al obtener técnicos:', error);
+    console.error('Error al obtener técnicos:', error);
     res.status(500).json({
       error: 'Error al obtener técnicos',
       details: error.message,
