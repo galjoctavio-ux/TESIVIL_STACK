@@ -187,7 +187,7 @@ export const createCasoFromCotizacion = async (req, res) => {
         tecnico_id, // Aquí sí va el ID externo
         tipo: 'proyecto',
         status: 'asignado',
-        origen_cotizacion_id: cotizacionId // (Opcional: si tienes esta columna para rastreo)
+        //origen_cotizacion_id: cotizacionId // (Opcional: si tienes esta columna para rastreo)
       })
       .select()
       .single();
