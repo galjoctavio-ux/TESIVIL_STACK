@@ -147,11 +147,10 @@ export const getCasoById = async (req, res) => {
   }
 };
 
-// --- NUEVO: Controlador para crear Caso y Cita desde Cotización ---
 export const createCasoFromCotizacion = async (req, res) => {
   const {
     cotizacionId,
-    tecnico_id,
+    tecnico_id, // Este es el ID externo (Google/Firebase)
     fecha_inicio,
     fecha_fin,
     cliente_nombre,
@@ -159,71 +158,74 @@ export const createCasoFromCotizacion = async (req, res) => {
   } = req.body;
 
   // Validación básica
-  if (!cotizacionId || !tecnico_id || !fecha_inicio || !fecha_fin || !cliente_nombre || !cliente_direccion) {
-    return res.status(400).json({ error: 'Faltan campos requeridos.' });
+  if (!cotizacionId || !tecnico_id || !fecha_inicio || !fecha_fin || !cliente_nombre) {
+    return res.status(400).json({ error: 'Faltan campos requeridos para agendar.' });
   }
 
   try {
-    // === PASO A: Crear Caso en Supabase ===
+    // 1. Obtener el ID interno de E!A del técnico
+    // (Necesitamos traducir el ID de Google/Auth al ID numérico de E!A)
+    const { data: perfilTecnico, error: errorPerfil } = await supabaseAdmin
+      .from('profiles')
+      .select('ea_id')
+      .eq('id_externo', tecnico_id)
+      .single();
+
+    if (errorPerfil || !perfilTecnico?.ea_id) {
+       return res.status(400).json({ error: 'El técnico seleccionado no está sincronizado con la agenda (Falta ea_id).' });
+    }
+    
+    const idProvider = perfilTecnico.ea_id; // Este es el ID que necesita la BD de E!A
+
+    // 2. Crear Caso en Supabase
     const { data: newCaso, error: casoError } = await supabaseAdmin
       .from('casos')
       .insert({
         cliente_nombre,
         cliente_direccion,
-        tecnico_id,
-        tipo: 'proyecto', // Asignar el tipo "proyecto"
-        status: 'asignado' // Asignar el status inicial
+        tecnico_id, // Aquí sí va el ID externo
+        tipo: 'proyecto',
+        status: 'asignado',
+        origen_cotizacion_id: cotizacionId // (Opcional: si tienes esta columna para rastreo)
       })
       .select()
       .single();
 
-    if (casoError) {
-      console.error('Error al crear el caso en Supabase:', casoError);
-      throw new Error('Error al crear el caso en Supabase.');
-    }
+    if (casoError) throw new Error('Error al crear el caso en Supabase: ' + casoError.message);
 
-    // === PASO B: Agendar en Easy!Appointments ===
-    const notas_estructuradas = JSON.stringify({
-      caso_id: newCaso.id,
-      cotizacion_id: cotizacionId
-    });
+    // 3. Generar Hash para Easy!Appointments (Obligatorio)
+    const hash = crypto.randomBytes(16).toString('hex');
 
+    // 4. Insertar Cita en Easy!Appointments
+    // Notas: is_unavailable = 0 (Cita real), id_services = NULL (o pon un ID si es estricto)
     const eaQuery = `
-      INSERT INTO ea_appointments (id_users_provider, start_datetime, end_datetime, notes, notas_estructuradas)
-      VALUES (?, ?, ?, ?, ?);
+      INSERT INTO ea_appointments 
+      (book_datetime, start_datetime, end_datetime, notes, hash, is_unavailable, id_users_provider, id_users_customer, id_services)
+      VALUES (NOW(), ?, ?, ?, ?, 0, ?, NULL, NULL);
     `;
 
-    // Usamos el nombre del cliente en el campo 'notes' para referencia rápida en EA
-    const plainNotes = `Proyecto para: ${cliente_nombre}.`;
+    const plainNotes = `Proyecto #${newCaso.id}: ${cliente_nombre}. (Desde Cotización)`;
 
     const [eaResult] = await eaPool.query(eaQuery, [
-      tecnico_id,
       fecha_inicio,
       fecha_fin,
       plainNotes,
-      notas_estructuradas
+      hash,
+      idProvider
     ]);
 
     if (eaResult.affectedRows === 0) {
-      // Este es un caso de fallo crítico. El caso se creó en Supabase pero no en EA.
-      // En un sistema real, aquí se debería implementar una lógica de compensación
-      // (ej: borrar el caso de Supabase o marcarlo como "error_agendamiento").
-      // Por ahora, solo informamos el error.
-      console.error('Error crítico: El caso se creó en Supabase pero falló el agendamiento en Easy!Appointments.');
-      return res.status(500).json({
-        error: 'El caso fue creado, pero la cita no pudo ser agendada. Por favor, revise manualmente.',
-        caso_creado: newCaso
-      });
+      throw new Error('No se pudo insertar la cita en Easy!Appointments.');
     }
 
-    // === PASO C: Éxito ===
-    res.status(201).json(newCaso);
+    res.status(201).json({ message: 'Caso y agenda creados con éxito', caso: newCaso });
 
   } catch (error) {
-    console.error('Error en el proceso de creación desde cotización:', error);
-    res.status(500).json({ error: 'Error en el servidor al procesar la solicitud.', details: error.message });
+    console.error('Error en createCasoFromCotizacion:', error);
+    res.status(500).json({ error: error.message });
   }
 };
+
 export const cerrarCasoManualTecnico = async (req, res) => {
   const { id: casoId } = req.params;
   const { id: tecnicoId } = req.user; // ID del técnico autenticado
