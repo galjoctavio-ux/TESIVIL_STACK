@@ -162,8 +162,8 @@ export const processRevision = async (payload, tecnico) => {
     // 6. GENERACIÓN PDF (PHP) Y EMAIL
     // ---------------------------------------------------------
     
-    // CORRECCIÓN AQUÍ: Eliminamos '/lete' de la URL por defecto y añadimos logs de depuración
-    const phpPdfEndpoint = process.env.PHP_PDF_ENDPOINT || 'http://localhost/api/revisiones/generar_pdf_final';
+    // CORRECCIÓN CRÍTICA: Apuntamos directo al puerto 8081 para evitar el filtro de Nginx
+    const phpPdfEndpoint = process.env.PHP_PDF_ENDPOINT || 'http://localhost:8081/api/revisiones/generar_pdf_final';
 
     console.log(`Delegando generación de PDF a: ${phpPdfEndpoint} (Revision ID: ${newRevisionId})`);
 
