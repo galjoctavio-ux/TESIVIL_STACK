@@ -7,7 +7,6 @@ import {
   verificarSolar,
   generarDiagnosticosAutomaticos 
 } from './calculos.service.js';
-// ¡NUEVO! Importamos nuestro servicio de email
 import { enviarReportePorEmail } from './email.service.js';
 
 export const processRevision = async (payload, tecnico) => {
@@ -17,36 +16,83 @@ export const processRevision = async (payload, tecnico) => {
     throw new Error('Faltan "revisionData" o "equiposData"');
   }
 
-  const revisionDataCorregida = { ...revisionData };
+  // ---------------------------------------------------------
+  // 1. SANITIZACIÓN Y PREPARACIÓN DE DATOS
+  // ---------------------------------------------------------
+  
+  // Creamos una copia para trabajar
+  const datosDeTrabajo = { ...revisionData };
 
+  // CORRECCIÓN 1: Asegurar tipos numéricos para evitar "toFixed is not a function"
+  // Convertimos a float, si falla o es null, asignamos 0.
+  datosDeTrabajo.fuga_total = parseFloat(datosDeTrabajo.fuga_total) || 0;
+  datosDeTrabajo.voltaje_medido = parseFloat(datosDeTrabajo.voltaje_medido) || 0;
+  
+  // Si viene voltaje_fn (que causa error en DB) y voltaje_medido es 0, lo aprovechamos
+  if (datosDeTrabajo.voltaje_fn) {
+    const vFn = parseFloat(datosDeTrabajo.voltaje_fn) || 0;
+    if (datosDeTrabajo.voltaje_medido === 0) {
+      datosDeTrabajo.voltaje_medido = vFn;
+    }
+  }
 
-  console.log(`Procesando revisión para el caso ${revisionDataCorregida.caso_id} por el técnico ${tecnico.email}`);
+  // Asegurar IDs numéricos
+  if (datosDeTrabajo.caso_id) {
+      datosDeTrabajo.caso_id = Number(datosDeTrabajo.caso_id);
+  }
 
-  let casoData; // (¡NUEVO!) La necesitamos en 2 sitios, la declaramos aquí
-  let pdfUrl = null; // (¡NUEVO!) Declarada aquí
+  // Sanitizar equipos para cálculos
+  const equiposSanitizados = equiposData.map(eq => ({
+      ...eq,
+      horas_uso: parseFloat(eq.horas_uso) || 0,
+      potencia: parseFloat(eq.potencia) || 0,
+      cantidad: parseFloat(eq.cantidad) || 1
+  }));
+
+  console.log(`Procesando revisión para el caso ${datosDeTrabajo.caso_id} por el técnico ${tecnico.email}`);
+
+  let casoData; 
+  let pdfUrl = null; 
 
   try {
-    // --- PASO 1: Ejecutar TODOS los cálculos ---
-    const voltajeMedido = revisionDataCorregida.voltaje_medido;
-    const equiposCalculados = calcularConsumoEquipos(equiposData, voltajeMedido);
-    const diagnosticoFuga = detectarFugas(revisionDataCorregida);
-    const diagnosticoSolar = verificarSolar(revisionDataCorregida);
+    // ---------------------------------------------------------
+    // 2. CÁLCULOS (Usando datosDeTrabajo que tiene fuga_total y todo lo necesario)
+    // ---------------------------------------------------------
+    const voltajeCalculo = datosDeTrabajo.voltaje_medido > 0 ? datosDeTrabajo.voltaje_medido : 127; // Default seguridad
+
+    const equiposCalculados = calcularConsumoEquipos(equiposSanitizados, voltajeCalculo);
+    const diagnosticoFuga = detectarFugas(datosDeTrabajo);
+    const diagnosticoSolar = verificarSolar(datosDeTrabajo);
+    
     const diagnosticos = generarDiagnosticosAutomaticos(
-      revisionDataCorregida,
+      datosDeTrabajo,
       equiposCalculados, 
       diagnosticoFuga, 
       diagnosticoSolar
     );
     console.log('Diagnósticos generados:', diagnosticos);
 
-    // --- PASO 2: Guardar la Revisión Principal ---
+    // ---------------------------------------------------------
+    // 3. GUARDADO EN BASE DE DATOS
+    // ---------------------------------------------------------
+    
+    // CORRECCIÓN 2: Limpieza estricta para Supabase
+    // Creamos un objeto LIMPIO solo con las columnas que sabemos que existen o queremos guardar.
+    // Copiamos todo primero...
+    const datosParaInsertar = { ...datosDeTrabajo };
+
+    // ... y ELIMINAMOS las columnas que NO existen en la tabla 'revisiones' y causan error.
+    delete datosParaInsertar.voltaje_fn;   // No existe en DB
+    delete datosParaInsertar.fuga_total;   // No existe en DB
+    delete datosParaInsertar.amperaje_medido; // No existe en DB (se usan corriente_red_fx)
+
+    // Agregamos campos calculados/sistémicos
+    datosParaInsertar.tecnico_id = tecnico.id;
+    datosParaInsertar.diagnosticos_automaticos = diagnosticos;
+
     const { data: revisionResult, error: revisionError } = await supabaseAdmin
       .from('revisiones')
-      .insert({ 
-          ...revisionDataCorregida,
-          tecnico_id: tecnico.id, // ¡AÑADIDO! Asociamos la revisión con el técnico.
-          diagnosticos_automaticos: diagnosticos
-      })
+      .insert(datosParaInsertar)
       .select()
       .single();
 
@@ -54,7 +100,7 @@ export const processRevision = async (payload, tecnico) => {
 
     const newRevisionId = revisionResult.id;
 
-    // --- PASO 3: Guardar Equipos ---
+    // --- Guardar Equipos ---
     let equiposProcesados = 0;
     if (equiposCalculados.length > 0) {
         const equiposParaInsertar = equiposCalculados.map(equipo => ({
@@ -69,18 +115,20 @@ export const processRevision = async (payload, tecnico) => {
         console.log(`Guardados ${equiposProcesados} equipos para la revisión ${newRevisionId}`);
     }
 
-    // --- PASO 4: Actualizar el Status del Caso ---
+    // --- Actualizar Status del Caso ---
     const { data: casoUpdated, error: casoError } = await supabaseAdmin
       .from('casos')
       .update({ status: 'completado' })
-      .eq('id', revisionDataCorregida.caso_id)
-      .select('cliente_nombre, cliente_direccion') // Obtenemos nombre y dirección
+      .eq('id', datosDeTrabajo.caso_id)
+      .select('cliente_nombre, cliente_direccion') 
       .single();
 
-    if (casoError) console.warn(`Error al actualizar caso ${revisionDataCorregida.caso_id}:`, casoError.message);
-    casoData = casoUpdated; // Guardamos los datos del caso
+    if (casoError) console.warn(`Error al actualizar caso ${datosDeTrabajo.caso_id}:`, casoError.message);
+    casoData = casoUpdated;
 
-    // --- PASO 5: Procesar Firma ---
+    // ---------------------------------------------------------
+    // 4. PROCESAMIENTO DE FIRMA Y ARCHIVOS
+    // ---------------------------------------------------------
     let firmaUrl = null;
     if (firmaBase64) {
         console.log('Procesando firma...');
@@ -106,7 +154,9 @@ export const processRevision = async (payload, tecnico) => {
           .eq('id', newRevisionId);
     }
 
-    // --- PASO 6: Delegar Generación de PDF a PHP ---
+    // ---------------------------------------------------------
+    // 5. GENERACIÓN PDF (PHP) Y EMAIL
+    // ---------------------------------------------------------
     console.log(`Delegando la generación del PDF para la revisión ${newRevisionId} a PHP.`);
 
     const phpPdfEndpoint = process.env.PHP_PDF_ENDPOINT || 'http://localhost/lete/api/revisiones/generar_pdf_final';
@@ -135,19 +185,18 @@ export const processRevision = async (payload, tecnico) => {
         }
     }
 
-    // --- PASO 7: Enviar Email (¡NUEVO!) ---
     if (pdfUrl && revisionResult.cliente_email && casoData?.cliente_nombre) {
       await enviarReportePorEmail(
         revisionResult.cliente_email,
         casoData.cliente_nombre,
         pdfUrl,
-        revisionResult.causas_alto_consumo // ¡NUEVO! Pasamos las causas
+        revisionResult.causas_alto_consumo 
       );
     } else {
       console.warn('Faltan datos (pdfUrl, email o nombre) para enviar el correo.');
     }
 
-    console.log(`Revisión ${newRevisionId} guardada. Caso ${revisionDataCorregida.caso_id} completado.`);
+    console.log(`Revisión ${newRevisionId} guardada. Caso ${datosDeTrabajo.caso_id} completado.`);
 
     return {
       message: `Revisión guardada. ${equiposProcesados} equipos. ${diagnosticos.length} diagnósticos.`,
@@ -159,7 +208,6 @@ export const processRevision = async (payload, tecnico) => {
 
   } catch (error) {
       console.error('Error fatal durante el procesamiento de la revisión:', error.message);
-      // Devolvemos el error
       throw error;
   }
 };
