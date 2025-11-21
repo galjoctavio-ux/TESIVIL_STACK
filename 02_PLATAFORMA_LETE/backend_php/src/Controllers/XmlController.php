@@ -10,29 +10,61 @@ class XmlController {
         $this->xmlService = new XmlService();
     }
 
-    // 1. SUBIR XML (Ya existente)
+    // 1. SUBIR XML (MODIFICADO PARA MULTI-ARCHIVOS)
     public function subirXml(): void {
-        if (!isset($_FILES['xml']) || $_FILES['xml']['error'] !== UPLOAD_ERR_OK) {
+        // Validar que existe la entrada 'xml'
+        if (!isset($_FILES['xml'])) {
             http_response_code(400);
-            echo json_encode(['error' => 'No se envió ningún archivo o hubo un error.']);
+            echo json_encode(['error' => 'No se enviaron archivos.']);
             return;
         }
 
-        $ext = pathinfo($_FILES['xml']['name'], PATHINFO_EXTENSION);
-        if (strtolower($ext) !== 'xml') {
+        $xmlContents = [];
+        $files = $_FILES['xml'];
+
+        // Detectar si se envió uno solo o múltiples
+        // En PHP, si envías multiple, 'name' es un array. Si es uno solo, es string.
+        $isMultiple = is_array($files['name']);
+        $count = $isMultiple ? count($files['name']) : 1;
+
+        for ($i = 0; $i < $count; $i++) {
+            $name = $isMultiple ? $files['name'][$i] : $files['name'];
+            $tmpName = $isMultiple ? $files['tmp_name'][$i] : $files['tmp_name'];
+            $error = $isMultiple ? $files['error'][$i] : $files['error'];
+
+            // 1. Validar errores de subida
+            if ($error !== UPLOAD_ERR_OK) continue; 
+
+            // 2. Validar extensión
+            $ext = pathinfo($name, PATHINFO_EXTENSION);
+            if (strtolower($ext) !== 'xml') continue;
+
+            // 3. Leer contenido y agregar a la lista
+            $contenido = file_get_contents($tmpName);
+            if ($contenido) {
+                $xmlContents[] = $contenido;
+            }
+        }
+
+        if (empty($xmlContents)) {
             http_response_code(400);
-            echo json_encode(['error' => 'El archivo debe ser .xml']);
+            echo json_encode(['error' => 'No se encontraron archivos XML válidos para procesar.']);
             return;
         }
 
         try {
-            $contenido = file_get_contents($_FILES['xml']['tmp_name']);
-            $resumen = $this->xmlService->procesarXml($contenido);
+            // LLAMADA A LA NUEVA FUNCIÓN DEL SERVICIO (LOTE)
+            // Asegúrate de que XmlService ya tenga el método procesarListaXml
+            $resumen = $this->xmlService->procesarListaXml($xmlContents);
 
-            // Transformar el resumen al formato deseado
+            // Transformar respuesta para el Frontend
             $respuesta = [
+                'status' => 'success',
                 'nuevos' => $resumen['nuevos_auto_creados'] ?? 0,
                 'actualizados' => $resumen['precios_actualizados'] ?? 0,
+                'total_procesados' => $resumen['archivos_procesados'] ?? 0,
+                // Enviamos 'data' completo por si quieres mostrar detalles de errores en el futuro
+                'data' => $resumen 
             ];
 
             header('Content-Type: application/json');
@@ -40,7 +72,7 @@ class XmlController {
 
         } catch (Exception $e) {
             http_response_code(500);
-            echo json_encode(['error' => $e->getMessage()]);
+            echo json_encode(['error' => 'Error interno: ' . $e->getMessage()]);
         }
     }
 

@@ -11,6 +11,48 @@ class XmlService {
         $this->db = $database->getConnection();
     }
 
+    // --- ¡NUEVA FUNCIÓN PRINCIPAL PARA LOTES! ---
+    public function procesarListaXml(array $listaXmlContents): array {
+        $granResumen = [
+            'archivos_procesados' => 0,
+            'archivos_con_error' => 0,
+            'errores' => [],
+            'proveedores_encontrados' => [], // Lista de nombres únicos
+            // Totales acumulados
+            'items_procesados' => 0,
+            'nuevos_auto_creados' => 0,
+            'precios_actualizados' => 0,
+            'items_ignorados_viejos' => 0
+        ];
+
+        foreach ($listaXmlContents as $index => $xmlContent) {
+            try {
+                // Llamamos a tu lógica original para cada archivo individual
+                $resumenIndividual = $this->procesarXml($xmlContent);
+
+                // Acumulamos los resultados en el Gran Resumen
+                $granResumen['archivos_procesados']++;
+                $granResumen['items_procesados'] += $resumenIndividual['items_procesados'];
+                $granResumen['nuevos_auto_creados'] += $resumenIndividual['nuevos_auto_creados'];
+                $granResumen['precios_actualizados'] += $resumenIndividual['precios_actualizados'];
+                $granResumen['items_ignorados_viejos'] += $resumenIndividual['items_ignorados_viejos'];
+
+                // Guardamos el proveedor si no está en la lista (para mostrar "Facturas de Home Depot, Cemex...")
+                if (!in_array($resumenIndividual['proveedor'], $granResumen['proveedores_encontrados'])) {
+                    $granResumen['proveedores_encontrados'][] = $resumenIndividual['proveedor'];
+                }
+
+            } catch (Exception $e) {
+                // Si falla un archivo, no detenemos todo el proceso, solo lo registramos
+                $granResumen['archivos_con_error']++;
+                $granResumen['errores'][] = "Archivo #" . ($index + 1) . ": " . $e->getMessage();
+            }
+        }
+
+        return $granResumen;
+    }
+
+    // --- TU FUNCIÓN ORIGINAL (Ahora es llamada por la función de arriba) ---
     public function procesarXml(string $xmlContent): array {
         libxml_use_internal_errors(true);
         $xml = simplexml_load_string($xmlContent);
@@ -19,9 +61,9 @@ class XmlService {
         $ns = $xml->getNamespaces(true);
         $xml->registerXPathNamespace('cfdi', $ns['cfdi']);
         
-        // 1. OBTENER LA FECHA REAL DE LA FACTURA (¡NUEVO!)
+        // 1. OBTENER LA FECHA REAL DE LA FACTURA
         $comprobante = $xml->xpath('//cfdi:Comprobante')[0];
-        $fechaComprobante = (string)$comprobante['Fecha']; // Ej: "2025-11-13T12:00:00"
+        $fechaComprobante = (string)$comprobante['Fecha']; //
 
         $emisor = $xml->xpath('//cfdi:Emisor')[0];
         $rfc = (string)$emisor['Rfc'];
@@ -36,7 +78,7 @@ class XmlService {
             'items_procesados' => 0,
             'nuevos_auto_creados' => 0,
             'precios_actualizados' => 0,
-            'items_ignorados_viejos' => 0 // ¡NUEVO!
+            'items_ignorados_viejos' => 0 
         ];
 
         foreach ($conceptos as $concepto) {
@@ -45,10 +87,10 @@ class XmlService {
             $precioUnitario = floatval($concepto['ValorUnitario']);
             if (empty($sku)) $sku = 'GEN-' . substr(md5($descripcion), 0, 8);
 
-            // 2. PASAR LA FECHA A LA LÓGICA (¡NUEVO!)
-            $accion = $this->actualizarMaterialProveedor($proveedorId, $sku, $descripcion, $precioUnitario, $fechaComprobante);
+            // 2. PASAR LA FECHA A LA LÓGICA
+            $accion = $this->actualizarMaterialProveedor($proveedorId, $sku, $descripcion, $precioUnitario, $fechaComprobante); //
             
-            // 3. ACTUALIZAR RESUMEN (¡NUEVO!)
+            // 3. ACTUALIZAR RESUMEN
             $resumen['items_procesados']++;
             if ($accion === 'NUEVO_AUTO_CREADO') $resumen['nuevos_auto_creados']++;
             if ($accion === 'ACTUALIZADO') $resumen['precios_actualizados']++;
@@ -58,7 +100,7 @@ class XmlService {
     }
 
     private function obtenerOcrearProveedor(string $rfc, string $razonSocial): int {
-        $stmt = $this->db->prepare("SELECT id FROM proveedores WHERE rfc = ? LIMIT 1");
+        $stmt = $this->db->prepare("SELECT id FROM proveedores WHERE rfc = ? LIMIT 1"); //
         $stmt->execute([$rfc]);
         $row = $stmt->fetch();
         if ($row) return intval($row['id']);
@@ -67,10 +109,10 @@ class XmlService {
         return intval($this->db->lastInsertId());
     }
 
-    // 4. LÓGICA DE FECHA ACTUALIZADA (¡NUEVO!)
+    // 4. LÓGICA DE FECHA ACTUALIZADA
     private function actualizarMaterialProveedor(int $proveedorId, string $sku, string $desc, float $precio, string $fechaComprobante): string {
         $sql = "SELECT id, recurso_id, fecha_ultimo_xml FROM materiales_proveedores 
-                WHERE proveedor_id = ? AND sku_proveedor = ? LIMIT 1";
+                WHERE proveedor_id = ? AND sku_proveedor = ? LIMIT 1"; //
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$proveedorId, $sku]);
         $row = $stmt->fetch();
@@ -82,7 +124,7 @@ class XmlService {
             $fechaGuardada = new DateTime($row['fecha_ultimo_xml']);
             
             if ($fechaNueva <= $fechaGuardada) {
-                return 'SKIPPED_OLD'; // La factura que subiste es más vieja, se ignora
+                return 'SKIPPED_OLD'; //
             }
 
             // Es más nueva, actualizamos
@@ -106,31 +148,29 @@ class XmlService {
     }
 
     private function crearNuevoRecurso(string $nombre, string $unidad, string $tipo): int {
-        $sql = "INSERT INTO recursos (nombre, unidad, tipo, precio_costo_base) VALUES (?, ?, ?, 0.00)";
+        $sql = "INSERT INTO recursos (nombre, unidad, tipo, precio_costo_base) VALUES (?, ?, ?, 0.00)"; //
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$nombre, $unidad, $tipo]);
         return intval($this->db->lastInsertId());
     }
 
-    // 5. ACTUALIZAR PRECIO CON FECHA (¡NUEVO!)
+    // 5. ACTUALIZAR PRECIO CON FECHA
     private function actualizarPrecioRecursoPrincipal(int $recursoId, float $nuevoPrecio, string $fechaComprobante): void {
-        $sql = "UPDATE recursos SET precio_costo_base = ?, fecha_actualizacion_costo = ? WHERE id = ?";
+        $sql = "UPDATE recursos SET precio_costo_base = ?, fecha_actualizacion_costo = ? WHERE id = ?"; //
         $this->db->prepare($sql)->execute([$nuevoPrecio, $fechaComprobante, $recursoId]);
     }
 
-    // Funciones de Admin (no se modifican)
+    // Funciones de Admin
     public function obtenerPendientes(): array {
-        // ... (código igual)
         $sql = "SELECT mp.id, p.razon_social, mp.sku_proveedor, mp.descripcion_proveedor, mp.ultimo_precio_registrado, mp.fecha_ultimo_xml 
                 FROM materiales_proveedores mp
                 JOIN proveedores p ON mp.proveedor_id = p.id
                 WHERE mp.recurso_id IS NULL
-                ORDER BY mp.fecha_ultimo_xml DESC";
+                ORDER BY mp.fecha_ultimo_xml DESC"; //
         return $this->db->query($sql)->fetchAll();
     }
     public function vincularRecurso(int $idMapeo, int $idRecursoInterno): void {
-        // ... (código igual)
-        $sql = "UPDATE materiales_proveedores SET recurso_id = ? WHERE id = ?";
+        $sql = "UPDATE materiales_proveedores SET recurso_id = ? WHERE id = ?"; //
         $this->db->prepare($sql)->execute([$idRecursoInterno, $idMapeo]);
     }
 }

@@ -92,7 +92,7 @@ const MapeoPrecios = () => {
         {/* CAJA 1: SUBIR XML */}
         <div style={{ flex: 1, background: '#f8f9fa', padding: '15px', borderRadius: '8px', minWidth: '300px' }}>
           <h4>📂 1. Subir XML</h4>
-          <input type="file" accept=".xml" onChange={handleFileUpload} />
+          <input type="file" accept=".xml" multiple onChange={handleFileUpload} />
           <p style={{ fontSize: '0.9em', color: '#666' }}>{uploadMsg}</p>
         </div>
 
