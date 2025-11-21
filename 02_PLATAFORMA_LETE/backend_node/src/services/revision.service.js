@@ -17,18 +17,15 @@ export const processRevision = async (payload, tecnico) => {
   }
 
   // ---------------------------------------------------------
-  // 1. SANITIZACIÓN Y PREPARACIÓN DE DATOS
+  // 1. SANITIZACIÓN DE DATOS GENERALES
   // ---------------------------------------------------------
-  
-  // Creamos una copia para trabajar
   const datosDeTrabajo = { ...revisionData };
 
-  // CORRECCIÓN 1: Asegurar tipos numéricos para evitar "toFixed is not a function"
-  // Convertimos a float, si falla o es null, asignamos 0.
+  // Corrección de tipos numéricos
   datosDeTrabajo.fuga_total = parseFloat(datosDeTrabajo.fuga_total) || 0;
   datosDeTrabajo.voltaje_medido = parseFloat(datosDeTrabajo.voltaje_medido) || 0;
   
-  // Si viene voltaje_fn (que causa error en DB) y voltaje_medido es 0, lo aprovechamos
+  // Manejo de voltaje_fn si existe
   if (datosDeTrabajo.voltaje_fn) {
     const vFn = parseFloat(datosDeTrabajo.voltaje_fn) || 0;
     if (datosDeTrabajo.voltaje_medido === 0) {
@@ -36,17 +33,25 @@ export const processRevision = async (payload, tecnico) => {
     }
   }
 
-  // Asegurar IDs numéricos
   if (datosDeTrabajo.caso_id) {
       datosDeTrabajo.caso_id = Number(datosDeTrabajo.caso_id);
   }
 
-  // Sanitizar equipos para cálculos
+  // ---------------------------------------------------------
+  // 2. SANITIZACIÓN DE EQUIPOS (Mapeo Frontend -> Backend)
+  // ---------------------------------------------------------
+  // Convertimos lo que llegue del front a lo que espera calculos.service y la BD
   const equiposSanitizados = equiposData.map(eq => ({
-      ...eq,
-      horas_uso: parseFloat(eq.horas_uso) || 0,
-      potencia: parseFloat(eq.potencia) || 0,
-      cantidad: parseFloat(eq.cantidad) || 1
+      nombre_equipo: eq.nombre_equipo,
+      nombre_personalizado: eq.nombre_personalizado || '', // Evitar undefined
+      estado_equipo: eq.estado_equipo,
+      unidad_tiempo: eq.unidad_tiempo || 'Horas/Día',
+      // CRÍTICO: Mapeamos 'horas_uso' (si viene del front) a 'tiempo_uso' (que pide la BD/Calculos)
+      tiempo_uso: parseFloat(eq.horas_uso || eq.tiempo_uso) || 0,
+      amperaje_medido: parseFloat(eq.amperaje_medido) || 0,
+      // La 'cantidad' se usa para multiplicar filas si fuera necesario, 
+      // pero aquí solo la guardamos temporalmente por si la lógica cambiara, NO se insertará.
+      cantidad: parseFloat(eq.cantidad) || 1 
   }));
 
   console.log(`Procesando revisión para el caso ${datosDeTrabajo.caso_id} por el técnico ${tecnico.email}`);
@@ -56,11 +61,13 @@ export const processRevision = async (payload, tecnico) => {
 
   try {
     // ---------------------------------------------------------
-    // 2. CÁLCULOS (Usando datosDeTrabajo que tiene fuga_total y todo lo necesario)
+    // 3. CÁLCULOS
     // ---------------------------------------------------------
-    const voltajeCalculo = datosDeTrabajo.voltaje_medido > 0 ? datosDeTrabajo.voltaje_medido : 127; // Default seguridad
+    const voltajeCalculo = datosDeTrabajo.voltaje_medido > 0 ? datosDeTrabajo.voltaje_medido : 127;
 
+    // calculos.service espera 'tiempo_uso' y devuelve 'kwh_bimestre_calculado'
     const equiposCalculados = calcularConsumoEquipos(equiposSanitizados, voltajeCalculo);
+    
     const diagnosticoFuga = detectarFugas(datosDeTrabajo);
     const diagnosticoSolar = verificarSolar(datosDeTrabajo);
     
@@ -70,23 +77,17 @@ export const processRevision = async (payload, tecnico) => {
       diagnosticoFuga, 
       diagnosticoSolar
     );
-    console.log('Diagnósticos generados:', diagnosticos);
 
     // ---------------------------------------------------------
-    // 3. GUARDADO EN BASE DE DATOS
+    // 4. GUARDADO EN BASE DE DATOS (LISTA BLANCA)
     // ---------------------------------------------------------
     
-    // CORRECCIÓN 2: Limpieza estricta para Supabase
-    // Creamos un objeto LIMPIO solo con las columnas que sabemos que existen o queremos guardar.
-    // Copiamos todo primero...
+    // Preparar objeto REVISIONES (Solo columnas válidas)
     const datosParaInsertar = { ...datosDeTrabajo };
-
-    // ... y ELIMINAMOS las columnas que NO existen en la tabla 'revisiones' y causan error.
-    delete datosParaInsertar.voltaje_fn;   // No existe en DB
-    delete datosParaInsertar.fuga_total;   // No existe en DB
-    delete datosParaInsertar.amperaje_medido; // No existe en DB (se usan corriente_red_fx)
-
-    // Agregamos campos calculados/sistémicos
+    delete datosParaInsertar.voltaje_fn;   
+    delete datosParaInsertar.fuga_total;   
+    delete datosParaInsertar.amperaje_medido; 
+    
     datosParaInsertar.tecnico_id = tecnico.id;
     datosParaInsertar.diagnosticos_automaticos = diagnosticos;
 
@@ -100,16 +101,26 @@ export const processRevision = async (payload, tecnico) => {
 
     const newRevisionId = revisionResult.id;
 
-    // --- Guardar Equipos ---
+    // Preparar objeto EQUIPOS (Solo columnas válidas según tu esquema)
+    // Esquema: id, revision_id, nombre_equipo, nombre_personalizado, amperaje_medido, tiempo_uso, unidad_tiempo, estado_equipo, kwh_bimestre_calculado
     let equiposProcesados = 0;
     if (equiposCalculados.length > 0) {
         const equiposParaInsertar = equiposCalculados.map(equipo => ({
-          ...equipo,
-          revision_id: newRevisionId
+          revision_id: newRevisionId,
+          nombre_equipo: equipo.nombre_equipo,
+          nombre_personalizado: equipo.nombre_personalizado,
+          amperaje_medido: equipo.amperaje_medido,
+          tiempo_uso: equipo.tiempo_uso,       // Ya aseguramos que es float arriba
+          unidad_tiempo: equipo.unidad_tiempo,
+          estado_equipo: equipo.estado_equipo,
+          kwh_bimestre_calculado: equipo.kwh_bimestre_calculado
+          // NOTA: Aquí filtramos explícitamente 'cantidad', 'horas_uso', etc.
         }));
+
         const { error: equiposError } = await supabaseAdmin
           .from('equipos_revisados')
           .insert(equiposParaInsertar);
+          
         if (equiposError) throw equiposError;
         equiposProcesados = equiposParaInsertar.length;
         console.log(`Guardados ${equiposProcesados} equipos para la revisión ${newRevisionId}`);
@@ -127,7 +138,7 @@ export const processRevision = async (payload, tecnico) => {
     casoData = casoUpdated;
 
     // ---------------------------------------------------------
-    // 4. PROCESAMIENTO DE FIRMA Y ARCHIVOS
+    // 5. PROCESAMIENTO DE FIRMA
     // ---------------------------------------------------------
     let firmaUrl = null;
     if (firmaBase64) {
@@ -146,8 +157,7 @@ export const processRevision = async (payload, tecnico) => {
 
         const { data: urlData } = supabaseAdmin.storage.from('reportes').getPublicUrl(filePath);
         firmaUrl = urlData.publicUrl;
-        console.log('Firma subida a:', firmaUrl);
-
+        
         await supabaseAdmin
           .from('revisiones')
           .update({ firma_url: firmaUrl })
@@ -155,10 +165,8 @@ export const processRevision = async (payload, tecnico) => {
     }
 
     // ---------------------------------------------------------
-    // 5. GENERACIÓN PDF (PHP) Y EMAIL
+    // 6. GENERACIÓN PDF (PHP) Y EMAIL
     // ---------------------------------------------------------
-    console.log(`Delegando la generación del PDF para la revisión ${newRevisionId} a PHP.`);
-
     const phpPdfEndpoint = process.env.PHP_PDF_ENDPOINT || 'http://localhost/lete/api/revisiones/generar_pdf_final';
 
     try {
@@ -168,21 +176,13 @@ export const processRevision = async (payload, tecnico) => {
 
         if (response.data && response.data.pdf_url) {
             pdfUrl = response.data.pdf_url;
-            console.log('PDF generado por PHP en:', pdfUrl);
-
             await supabaseAdmin
                 .from('revisiones')
                 .update({ pdf_url: pdfUrl })
                 .eq('id', newRevisionId);
-        } else {
-            console.warn('El servicio de PHP no devolvió una URL de PDF.', response.data);
-        }
+        } 
     } catch (axiosError) {
-        console.error('Error al llamar al servicio de PHP para generar el PDF:', axiosError.message);
-        if (axiosError.response) {
-            console.error('Data:', axiosError.response.data);
-            console.error('Status:', axiosError.response.status);
-        }
+        console.error('Error al llamar al servicio de PHP:', axiosError.message);
     }
 
     if (pdfUrl && revisionResult.cliente_email && casoData?.cliente_nombre) {
@@ -192,17 +192,11 @@ export const processRevision = async (payload, tecnico) => {
         pdfUrl,
         revisionResult.causas_alto_consumo 
       );
-    } else {
-      console.warn('Faltan datos (pdfUrl, email o nombre) para enviar el correo.');
     }
 
-    console.log(`Revisión ${newRevisionId} guardada. Caso ${datosDeTrabajo.caso_id} completado.`);
-
     return {
-      message: `Revisión guardada. ${equiposProcesados} equipos. ${diagnosticos.length} diagnósticos.`,
+      message: `Revisión guardada. ${equiposProcesados} equipos.`,
       revision_id: newRevisionId,
-      diagnosticos_generados: diagnosticos,
-      firma_url: firmaUrl,
       pdf_url: pdfUrl
     };
 
