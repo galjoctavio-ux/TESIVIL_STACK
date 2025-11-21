@@ -37,21 +37,33 @@ const MapeoPrecios = () => {
     }
   };
 
-  // 1. Subir XML
+  // 1. Subir XML (Múltiple)
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploadMsg("Procesando...");
+    const files = e.target.files; // <--- CORRECCIÓN: Tomamos toda la lista, no solo [0]
+    
+    if (!files || files.length === 0) return;
+    
+    setUploadMsg(`Procesando ${files.length} archivo(s)...`);
+    
     try {
-      const res = await subirXml(file);
-      // BUGFIX: Leer `res.nuevos` en vez de `res.data.nuevos_mapeos`
-      if (res.nuevos !== undefined) {
-        setUploadMsg(`✅ ${res.nuevos} nuevos, ${res.actualizados} actualizados.`);
-        cargarDatos();
+      const res = await subirXml(files);
+      
+      // Ajustamos la lógica para leer la respuesta del nuevo Backend
+      if (res.status === 'success') {
+        // Mostramos el resumen completo
+        const total = res.total_procesados || files.length;
+        setUploadMsg(`✅ Procesados: ${total} | Nuevos: ${res.nuevos} | Actualizados: ${res.actualizados}`);
+        cargarDatos(); // Recargamos la tabla de pendientes
       } else {
-        setUploadMsg(`❌ ${res.error}`);
+        setUploadMsg(`❌ ${res.error || 'Error al procesar'}`);
       }
-    } catch (err) { setUploadMsg("Error de conexión"); }
+    } catch (err) { 
+      console.error(err);
+      setUploadMsg("Error de conexión al subir archivos."); 
+    }
+    
+    // Opcional: Limpiar el input para permitir subir los mismos archivos de nuevo si falló
+    e.target.value = ''; 
   };
 
   // 2. Vincular

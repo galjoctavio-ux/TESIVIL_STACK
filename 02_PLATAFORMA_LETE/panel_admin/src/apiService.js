@@ -39,14 +39,24 @@ const getAuthHeaders = (isJson = true) => {
   return headers;
 };
 
-// 1. SUBIDA DE XML (FormData no lleva Content-Type manual)
-export const subirXml = async (file) => {
+// 1. SUBIDA DE XML (SOPORTE MULTI-ARCHIVO)
+export const subirXml = async (files) => {
   const formData = new FormData();
-  formData.append('xml', file);
+
+  // Verificamos si es una lista de archivos (FileList) o un array
+  if (files instanceof FileList || Array.isArray(files)) {
+    for (let i = 0; i < files.length; i++) {
+      // IMPORTANTE: Usamos 'xml[]' para que PHP lo reciba como array
+      formData.append('xml[]', files[i]);
+    }
+  } else {
+    // Soporte legacy por si acaso envías un solo archivo suelto
+    formData.append('xml[]', files);
+  }
 
   const response = await fetch(`${PHP_API_URL}/xml/upload`, {
     method: 'POST',
-    headers: getAuthHeaders(false), // false porque es FormData
+    headers: getAuthHeaders(false), // false porque el navegador pone el boundary del FormData
     body: formData,
   });
   return await response.json();
