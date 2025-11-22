@@ -19,23 +19,31 @@ export const processRevision = async (payload, tecnicoAuth) => {
   console.log(`[RevisionService] Procesando revisión. Caso ID: ${revisionData.caso_id || 'N/A'}`);
 
   // ---------------------------------------------------------
-  // 0. OBTENER DATOS DEL PERFIL DEL INGENIERO (Nuevo: Punto 3)
+  // 0. OBTENER DATOS DEL PERFIL DEL INGENIERO (CORREGIDO)
   // ---------------------------------------------------------
-  // Buscamos en la tabla 'profiles' el nombre real y la firma del ingeniero
-  // Usamos tecnicoAuth.id que viene del token de autenticación
-  const { data: perfilIngeniero, error: perfilError } = await supabaseAdmin
-    .from('profiles')
-    .select('nombre, firma_url, rol')
-    .eq('user_id', tecnicoAuth.id)
-    .single();
+  let nombreIngeniero = 'Ingeniero Especialista';
+  let firmaIngenieroUrl = null;
 
-  if (perfilError) {
-    console.warn('Advertencia: No se pudo obtener perfil del ingeniero, usando email como fallback.', perfilError.message);
+  try {
+    // 1. Intentamos buscar en la tabla 'profiles'
+    const { data: perfil, error: perfilError } = await supabaseAdmin
+      .from('profiles')
+      .select('nombre, firma_url')
+      .eq('user_id', tecnicoAuth.id)
+      .single();
+
+    if (!perfilError && perfil) {
+      nombreIngeniero = perfil.nombre || tecnicoAuth.user_metadata?.full_name || tecnicoAuth.email;
+      firmaIngenieroUrl = perfil.firma_url;
+    } else {
+      // 2. Si falla, intentamos sacar el nombre de los metadatos del auth (si existen)
+      console.warn('No se halló perfil, usando fallback de Auth.');
+      nombreIngeniero = tecnicoAuth.user_metadata?.full_name || tecnicoAuth.email;
+    }
+  } catch (e) {
+    console.error('Error recuperando perfil ingeniero:', e.message);
+    nombreIngeniero = tecnicoAuth.email; // Último recurso
   }
-
-  // Fallbacks por si no tiene perfil completo aún
-  const nombreIngeniero = perfilIngeniero?.nombre || tecnicoAuth.email || 'Ingeniero LETE';
-  const firmaIngenieroUrl = perfilIngeniero?.firma_url || null;
 
   // ---------------------------------------------------------
   // 1. SANITIZACIÓN Y NORMALIZACIÓN DE DATOS

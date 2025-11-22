@@ -12,7 +12,7 @@ const timelineContainerStyles = {
 };
 
 const hourGridStyles = {
-    paddingLeft: '60px', // Space for the time labels
+  paddingLeft: '60px', // Space for the time labels
 };
 
 const hourSlotStyles = {
@@ -24,15 +24,15 @@ const hourSlotStyles = {
 };
 
 const timeLabelStyles = {
-    position: 'absolute',
-    left: '0px',
-    transform: 'translateY(-50%)',
-    fontSize: '12px',
-    color: '#666',
-    width: '50px',
-    textAlign: 'right',
-    paddingRight: '10px',
-  };
+  position: 'absolute',
+  left: '0px',
+  transform: 'translateY(-50%)',
+  fontSize: '12px',
+  color: '#666',
+  width: '50px',
+  textAlign: 'right',
+  paddingRight: '10px',
+};
 
 const DiaTimeline = ({ date }) => {
   const [citas, setCitas] = useState([]);
@@ -76,7 +76,7 @@ const DiaTimeline = ({ date }) => {
         <div style={hourGridStyles}>
           {hours.map(hour => (
             <div key={hour} id={`hora-${hour}`} style={{ ...hourSlotStyles, position: 'relative' }}>
-               <span style={timeLabelStyles}>{`${String(hour).padStart(2, '0')}:00`}</span>
+              <span style={timeLabelStyles}>{`${String(hour).padStart(2, '0')}:00`}</span>
             </div>
           ))}
 
@@ -99,44 +99,44 @@ const DiaTimeline = ({ date }) => {
             const cardClassName = `cita-card card-${tipoCaso}`; // -> "cita-card card-alto_consumo"
 
             return (
-                <div
-                    key={cita.id}
-                    // This line applies the dynamic classes from AgendaStyles.css
-                    // e.g., "cita-card card-alto_consumo"
-                    className={cardClassName}
-                    style={style}
-                >
-                    {/* 3. Renderizamos los detalles del caso si existen */}
-                    {cita.caso ? (
-                        <>
-                            <div className="cita-content">
-                                <strong>{cita.caso.cliente_nombre}</strong>
-                                <p>{dayjs(cita.start_datetime).format('h:mm A')} - {dayjs(cita.end_datetime).format('h:mm A')}</p>
-                            </div>
-                            <div className="cita-actions"> {/* --- Botón de Mapa (Siempre visible) --- */} <button className="cita-icon-button" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cita.caso.cliente_direccion)}`, "_blank")} title="Abrir en Google Maps" > 📍 </button>
-                                {/* --- Botón de Revisar (Lógica condicional) --- */} {(cita.caso.tipo !== 'levantamiento' && cita.caso.status !== 'completado') && (
-                                <Link to={`/revision/${cita.caso.id}`} className="cita-icon-button" title="Iniciar Revisión" > 📝 </Link> )}
-                                {/* --- Botón de Cotizar (Lógica condicional) --- */} {cita.caso.status !== 'completado' && (
-                                <Link to="/cotizador" state={{ casoId: cita.caso.id, clienteNombre: cita.caso.cliente_nombre, clienteDireccion: cita.caso.cliente_direccion /* No pasamos clienteTelefono, tal como se especificó */ }} className="cita-icon-button" title="Crear Cotización" > ⚡ </Link> )}
-                                {/* --- Botón de Detalles (Nuevo) --- */}
-                                <Link to={`/detalle-caso/${cita.caso.id}`} className="cita-icon-button" title="Ver Detalles del Caso">
-                                ℹ️
-                                </Link>
-                                </div>
-                        </>
-                    ) : (
-                        <>
-                            <strong>Cita (sin caso vinculado)</strong>
-                            <p>{dayjs(cita.start_datetime).format('h:mm A')}</p>
-                        </>
-                    )}
-                </div>
+              <div
+                key={cita.id}
+                // This line applies the dynamic classes from AgendaStyles.css
+                // e.g., "cita-card card-alto_consumo"
+                className={cardClassName}
+                style={style}
+              >
+                {/* 3. Renderizamos los detalles del caso si existen */}
+                {cita.caso ? (
+                  <>
+                    <div className="cita-content">
+                      <strong>{cita.caso.cliente_nombre}</strong>
+                      <p>{dayjs(cita.start_datetime).format('h:mm A')} - {dayjs(cita.end_datetime).format('h:mm A')}</p>
+                    </div>
+                    <div className="cita-actions"> {/* --- Botón de Mapa (Siempre visible) --- */} <button className="cita-icon-button" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cita.caso.cliente_direccion)}`, "_blank")} title="Abrir en Google Maps" > 📍 </button>
+                      {/* --- Botón de Revisar (Lógica condicional) --- */} {(cita.caso.tipo !== 'levantamiento' && cita.caso.status !== 'completado') && (
+                        <Link to={`/revision/${cita.caso.id}`} className="cita-icon-button" title="Iniciar Revisión" > 📝 </Link>)}
+                      {/* --- Botón de Cotizar (Lógica condicional) --- */} {cita.caso.status !== 'completado' && (
+                        <Link to="/cotizador" state={{ casoId: cita.caso.id, clienteNombre: cita.caso.cliente_nombre, clienteDireccion: cita.caso.cliente_direccion /* No pasamos clienteTelefono, tal como se especificó */ }} className="cita-icon-button" title="Crear Cotización" > ⚡ </Link>)}
+                      {/* --- Botón de Detalles (Nuevo) --- */}
+                      <Link to={`/detalle-caso/${cita.caso.id}`} className="cita-icon-button" title="Ver Detalles del Caso">
+                        ℹ️
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <strong>Cita (sin caso vinculado)</strong>
+                    <p>{dayjs(cita.start_datetime).format('h:mm A')}</p>
+                  </>
+                )}
+              </div>
             );
-        })}
+          })}
 
           {!isLoading && citas.length === 0 && (
-             <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                <p>No hay citas programadas para este día.</p>
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+              <p>No hay citas programadas para este día.</p>
             </div>
           )}
         </div>
