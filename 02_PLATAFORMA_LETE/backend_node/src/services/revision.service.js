@@ -9,21 +9,40 @@ import {
 import { enviarReportePorEmail } from './email.service.js';
 import { generarPDF } from './pdf.service.js';
 
-export const processRevision = async (payload, tecnico) => {
+export const processRevision = async (payload, tecnicoAuth) => {
   const { revisionData, equiposData, firmaBase64 } = payload;
 
   if (!revisionData || !equiposData) {
     throw new Error('Faltan "revisionData" o "equiposData" en la solicitud.');
   }
 
-  console.log(`[RevisionService] Procesando revisión. Caso ID: ${revisionData.caso_id || 'N/A'}, Técnico: ${tecnico.email}`);
+  console.log(`[RevisionService] Procesando revisión. Caso ID: ${revisionData.caso_id || 'N/A'}`);
+
+  // ---------------------------------------------------------
+  // 0. OBTENER DATOS DEL PERFIL DEL INGENIERO (Nuevo: Punto 3)
+  // ---------------------------------------------------------
+  // Buscamos en la tabla 'profiles' el nombre real y la firma del ingeniero
+  // Usamos tecnicoAuth.id que viene del token de autenticación
+  const { data: perfilIngeniero, error: perfilError } = await supabaseAdmin
+    .from('profiles')
+    .select('nombre, firma_url, rol')
+    .eq('user_id', tecnicoAuth.id)
+    .single();
+
+  if (perfilError) {
+    console.warn('Advertencia: No se pudo obtener perfil del ingeniero, usando email como fallback.', perfilError.message);
+  }
+
+  // Fallbacks por si no tiene perfil completo aún
+  const nombreIngeniero = perfilIngeniero?.nombre || tecnicoAuth.email || 'Ingeniero LETE';
+  const firmaIngenieroUrl = perfilIngeniero?.firma_url || null;
 
   // ---------------------------------------------------------
   // 1. SANITIZACIÓN Y NORMALIZACIÓN DE DATOS
   // ---------------------------------------------------------
   const datosDeTrabajo = { ...revisionData };
 
-  // Asegurar números
+  // Asegurar números para evitar errores matemáticos
   datosDeTrabajo.fuga_total = parseFloat(datosDeTrabajo.fuga_total) || 0;
   datosDeTrabajo.voltaje_medido = parseFloat(datosDeTrabajo.voltaje_medido) || 0;
   datosDeTrabajo.caso_id = Number(datosDeTrabajo.caso_id);
@@ -33,12 +52,12 @@ export const processRevision = async (payload, tecnico) => {
     datosDeTrabajo.paneles_antiguedad_anos = parseInt(datosDeTrabajo.antiguedad_paneles) || 0;
   }
 
-  // Si el voltaje medido es 0, intentar usar el voltaje fase-neutro reportado
+  // Si el voltaje medido es 0, intentar usar el voltaje fase-neutro reportado en el formulario
   if (datosDeTrabajo.voltaje_fn && datosDeTrabajo.voltaje_medido === 0) {
     datosDeTrabajo.voltaje_medido = parseFloat(datosDeTrabajo.voltaje_fn) || 127;
   }
 
-  // Limpiar array de equipos
+  // Limpiar array de equipos (Asegurar tipos de datos)
   const equiposSanitizados = equiposData.map(eq => ({
     nombre_equipo: eq.nombre_equipo,
     nombre_personalizado: eq.nombre_personalizado || '',
@@ -51,7 +70,7 @@ export const processRevision = async (payload, tecnico) => {
 
   let casoData = null;
   let pdfUrl = null;
-  let firmaUrl = null;
+  let firmaClienteUrl = null; // Variable para la firma del cliente (PWA)
   let revisionResult = null;
 
   try {
@@ -63,12 +82,13 @@ export const processRevision = async (payload, tecnico) => {
     // Calculamos consumo individual
     let equiposCalculados = calcularConsumoEquipos(equiposSanitizados, voltajeCalculo);
 
-    // ORDENAMIENTO: De mayor a menor consumo (Top Consumidores)
+    // ORDENAMIENTO: De mayor a menor consumo (Top Consumidores) - Requerimiento Top
     equiposCalculados.sort((a, b) => (b.kwh_bimestre_calculado || 0) - (a.kwh_bimestre_calculado || 0));
 
-    // Cálculo del Total Bimestral Estimado
+    // Cálculo del Total Bimestral Estimado (Suma)
     const totalKwhBimestre = equiposCalculados.reduce((acc, curr) => acc + (curr.kwh_bimestre_calculado || 0), 0);
 
+    // Diagnósticos adicionales
     const diagnosticoFuga = detectarFugas(datosDeTrabajo);
     const diagnosticoSolar = verificarSolar(datosDeTrabajo);
     const diagnosticos = generarDiagnosticosAutomaticos(datosDeTrabajo, equiposCalculados, diagnosticoFuga, diagnosticoSolar);
@@ -78,13 +98,13 @@ export const processRevision = async (payload, tecnico) => {
     // ---------------------------------------------------------
     const datosParaInsertar = { ...datosDeTrabajo };
 
-    // Eliminar campos que no existen en la tabla 'revisiones'
+    // Eliminar campos temporales que no existen en la tabla 'revisiones'
     delete datosParaInsertar.voltaje_fn;
     delete datosParaInsertar.fuga_total;
     delete datosParaInsertar.amperaje_medido;
     delete datosParaInsertar.antiguedad_paneles;
 
-    datosParaInsertar.tecnico_id = tecnico.id;
+    datosParaInsertar.tecnico_id = tecnicoAuth.id; // Usamos el ID autenticado
     datosParaInsertar.diagnosticos_automaticos = diagnosticos;
     datosParaInsertar.fecha_revision = new Date().toISOString();
 
@@ -116,7 +136,7 @@ export const processRevision = async (payload, tecnico) => {
       if (eqErr) throw new Error(`Error insertando equipos: ${eqErr.message}`);
     }
 
-    // Actualizar Caso y obtener info del Cliente
+    // Actualizar Caso y obtener info del Cliente (Nombre y Dirección para el PDF)
     const { data: casoUpdated, error: casoError } = await supabaseAdmin
       .from('casos')
       .update({ status: 'completado' })
@@ -128,7 +148,7 @@ export const processRevision = async (payload, tecnico) => {
     casoData = casoUpdated;
 
     // ---------------------------------------------------------
-    // 4. PROCESAMIENTO DE FIRMA
+    // 4. PROCESAMIENTO DE FIRMA CLIENTE (Desde PWA)
     // ---------------------------------------------------------
     if (firmaBase64) {
       try {
@@ -136,17 +156,20 @@ export const processRevision = async (payload, tecnico) => {
         if (matches && matches.length === 3) {
           const contentType = matches[1];
           const data = Buffer.from(matches[2], 'base64');
-          const filePath = `firmas/revision-${newRevisionId}.png`;
+          // Guardamos la firma del cliente
+          const filePath = `firmas/revision-cliente-${newRevisionId}.png`;
 
           const { error: upErr } = await supabaseAdmin.storage.from('reportes').upload(filePath, data, { contentType, upsert: true });
           if (!upErr) {
             const { data: urlData } = supabaseAdmin.storage.from('reportes').getPublicUrl(filePath);
-            firmaUrl = urlData.publicUrl;
-            await supabaseAdmin.from('revisiones').update({ firma_url: firmaUrl }).eq('id', newRevisionId);
+            firmaClienteUrl = urlData.publicUrl;
+
+            // Actualizamos la revisión con la firma del cliente
+            await supabaseAdmin.from('revisiones').update({ firma_url: firmaClienteUrl }).eq('id', newRevisionId);
           }
         }
       } catch (errFirma) {
-        console.error('Error procesando firma:', errFirma);
+        console.error('Error procesando firma del cliente:', errFirma);
       }
     }
 
@@ -160,7 +183,9 @@ export const processRevision = async (payload, tecnico) => {
         cliente_nombre: casoData?.cliente_nombre || 'Cliente',
         cliente_direccion: casoData?.cliente_direccion || '',
         cliente_email: revisionResult.cliente_email || '',
-        tecnico_nombre: tecnico.email || 'Técnico LETE'
+        // DATOS DEL INGENIERO (Obtenidos del paso 0)
+        tecnico_nombre: nombreIngeniero,
+        firma_ingeniero_url: firmaIngenieroUrl
       },
       mediciones: {
         tipo_servicio: revisionResult.tipo_servicio,
@@ -190,7 +215,7 @@ export const processRevision = async (payload, tecnico) => {
       consumo_total_estimado: totalKwhBimestre,
       causas_alto_consumo: revisionResult.causas_alto_consumo || [],
       recomendaciones_tecnico: revisionResult.recomendaciones_tecnico || '',
-      firma_base64: firmaUrl
+      firma_cliente_url: firmaClienteUrl // Pasamos la firma del cliente al PDF
     };
 
     try {
@@ -210,6 +235,7 @@ export const processRevision = async (payload, tecnico) => {
         pdfUrl = urlData.publicUrl;
 
         console.log('PDF generado y subido exitosamente:', pdfUrl);
+        // Guardamos la URL del PDF generado
         await supabaseAdmin.from('revisiones').update({ pdf_url: pdfUrl }).eq('id', newRevisionId);
       }
     } catch (pdfError) {
