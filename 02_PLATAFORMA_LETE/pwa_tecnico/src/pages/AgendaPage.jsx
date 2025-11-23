@@ -90,7 +90,7 @@ function AgendaPage() {
           onSlideChange={handleSlideChange}
         >
           {dias.map((dia, index) => (
-            <SwiperSlide key={index}>
+            <SwiperSlide key={dia.toISOString()}>
               <div className='dia-header'>
                 <strong>
                   {dayjs(dia).format('dddd').charAt(0).toUpperCase() + dayjs(dia).format('dddd').slice(1)}
