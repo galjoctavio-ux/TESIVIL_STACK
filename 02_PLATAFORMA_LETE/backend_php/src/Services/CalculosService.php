@@ -322,6 +322,33 @@ class CalculosService {
         $this->db->prepare($sql)->execute([$id]);
     }
 
+    // --- FUNCIÓN FALTANTE PARA EL PANEL ADMIN ---
+    public function obtenerListadoCotizaciones(): array {
+        $sql = "SELECT 
+                    id, 
+                    uuid, 
+                    tecnico_nombre, 
+                    cliente_nombre, 
+                    precio_venta_final, 
+                    total_materiales_cd,
+                    descuento_pct,
+                    estimacion_ia,
+                    razon_detencion,
+                    estado, 
+                    fecha_creacion,
+                    direccion_obra
+                FROM cotizaciones 
+                ORDER BY fecha_creacion DESC";
+                
+        return $this->db->query($sql)->fetchAll();
+    }
+
+    public function aprobarRecurso(int $id): void {
+        // Actualizamos el estatus para que sea visible en el cotizador
+        $sql = "UPDATE recursos SET estatus = 'APROBADO' WHERE id = ?";
+        $this->db->prepare($sql)->execute([$id]);
+    }
+
     // --- FUNCIÓN RECUPERADA ---
     public function obtenerTextoMateriales(int $cotizacionId): string {
         $sql = "SELECT ci.cantidad, r.unidad, r.nombre 
