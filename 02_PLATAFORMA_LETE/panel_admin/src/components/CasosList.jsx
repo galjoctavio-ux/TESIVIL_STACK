@@ -113,7 +113,19 @@ function CasosList() {
                       💰 Cotizaciones
                     </Link>
                     {caso.tipo === 'alto_consumo' && (
-                       <a href={`${VITE_PHP_API_URL}/revisiones/generar_pdf_final?revision_id=${caso.id}`} target="_blank" rel="noopener noreferrer" style={{ background: '#dc3545', color: 'white', textDecoration: 'none', padding: '5px 10px', borderRadius: '4px' }}>
+                      <a
+                        href={caso.revisiones?.[0]?.pdf_url || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          background: caso.revisiones?.[0]?.pdf_url ? '#dc3545' : '#6c757d',
+                          color: 'white',
+                          textDecoration: 'none',
+                          padding: '5px 10px',
+                          borderRadius: '4px',
+                          pointerEvents: caso.revisiones?.[0]?.pdf_url ? 'auto' : 'none'
+                        }}
+                      >
                         📄 PDF
                       </a>
                     )}

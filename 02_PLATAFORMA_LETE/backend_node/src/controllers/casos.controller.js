@@ -4,110 +4,111 @@ import eaPool from '../services/eaDatabase.js'; // --- AÑADIDO: Importar la con
 
 // POST /casos (Crear nuevo caso)
 export const createCaso = async (req, res) => {
-  const { cliente_nombre, cliente_direccion, cliente_telefono, comentarios_iniciales } = req.body;
+  const { cliente_nombre, cliente_direccion, cliente_telefono, comentarios_iniciales } = req.body;
 
-  if (!cliente_nombre || !cliente_direccion) {
-    return res.status(400).json({ error: 'Nombre y dirección del cliente son requeridos' });
-  }
+  if (!cliente_nombre || !cliente_direccion) {
+    return res.status(400).json({ error: 'Nombre y dirección del cliente son requeridos' });
+  }
 
-  try {
-    // Como el middleware limpió el cliente, esto usa la SERVICE_KEY
-    // y se salta el RLS
-    const { data, error } = await supabaseAdmin
-      .from('casos')
-      .insert({
-        cliente_nombre,
-        cliente_direccion,
-        cliente_telefono,
-        comentarios_iniciales,
-        status: 'pendiente' // Status inicial
-      })
-      .select()
-      .single();
+  try {
+    // Como el middleware limpió el cliente, esto usa la SERVICE_KEY
+    // y se salta el RLS
+    const { data, error } = await supabaseAdmin
+      .from('casos')
+      .insert({
+        cliente_nombre,
+        cliente_direccion,
+        cliente_telefono,
+        comentarios_iniciales,
+        status: 'pendiente' // Status inicial
+      })
+      .select()
+      .single();
 
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (error) {
-    console.error('Error al crear caso:', error);
-    res.status(500).json({ error: 'Error al crear el caso', details: error.message });
-  }
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Error al crear caso:', error);
+    res.status(500).json({ error: 'Error al crear el caso', details: error.message });
+  }
 };
 
 // GET /casos (Listar casos por rol)
 export const getCasos = async (req, res) => {
-  // req.user fue añadido por el middleware requireAuth
-  const { id: userId, rol } = req.user;
+  // req.user fue añadido por el middleware requireAuth
+  const { id: userId, rol } = req.user;
 
-  try {
-    // Construimos la query base
-    let query = supabaseAdmin
-      .from('casos')
-      .select('id, cliente_nombre, cliente_direccion, cliente_telefono, status, fecha_creacion, tipo, tecnico:profiles(nombre)')
-      .order('fecha_creacion', { ascending: false });
+  try {
+    // Construimos la query base
+    let query = supabaseAdmin
+      .from('casos')
+      .select('id, cliente_nombre, cliente_direccion, cliente_telefono, status, fecha_creacion, tipo, tecnico:profiles(nombre), revisiones(pdf_url)')
+      .order('fecha_creacion', { ascending: false });
 
-    // ¡Lógica de Roles!
-    if (rol === 'admin') {
-      // El admin ve todo (no añade filtros)
-      console.log('Listando casos para ADMIN');
-    } else if (rol === 'tecnico') {
-      // El técnico solo ve sus casos asignados
-      console.log(`Listando casos para TECNICO: ${userId}`);
-      query = query.eq('tecnico_id', userId);
-    } else {
-      return res.status(403).json({ error: 'Rol no autorizado para ver casos' });
-    }
+    // ¡Lógica de Roles!
+    if (rol === 'admin') {
+      // El admin ve todo (no añade filtros)
+      console.log('Listando casos para ADMIN');
+    } else if (rol === 'tecnico') {
+      // El técnico solo ve sus casos asignados
+      console.log(`Listando casos para TECNICO: ${userId}`);
+      query = query.eq('tecnico_id', userId);
+    } else {
+      return res.status(403).json({ error: 'Rol no autorizado para ver casos' });
+    }
 
-    // Ejecutamos la query
-    const { data, error } = await query;
+    // Ejecutamos la query
+    const { data, error } = await query;
 
-    if (error) throw error;
-    res.status(200).json(data);
+    if (error) throw error;
+    res.status(200).json(data);
 
-  } catch (error) {
-    console.error('Error al listar casos:', error);
-    res.status(500).json({ error: 'Error al listar los casos', details: error.message });
-  }
+  } catch (error) {
+    console.error('Error al listar casos:', error);
+    res.status(500).json({ error: 'Error al listar los casos', details: error.message });
+  }
 };
 
 // PUT /casos/:id (Asignar/Actualizar caso)
 export const updateCaso = async (req, res) => {
-  const { id } = req.params;
-  // Extraemos todos los campos potencialmente actualizables
-  const { tecnico_id, status, cliente_nombre, cliente_direccion, cliente_telefono } = req.body;
+  const { id } = req.params;
+  // Extraemos todos los campos potencialmente actualizables
+  const { tecnico_id, status, cliente_nombre, cliente_direccion, cliente_telefono } = req.body;
 
-  // Creamos el objeto de actualización dinámicamente
-  const updates = {};
-  if (tecnico_id) updates.tecnico_id = tecnico_id;
-  if (status) updates.status = status;
-  if (cliente_nombre) updates.cliente_nombre = cliente_nombre;
-  if (cliente_direccion) updates.cliente_direccion = cliente_direccion;
-  if (cliente_telefono) updates.cliente_telefono = cliente_telefono;
+  // Creamos el objeto de actualización dinámicamente
+  const updates = {};
+  if (tecnico_id) updates.tecnico_id = tecnico_id;
+  if (status) updates.status = status;
+  if (cliente_nombre) updates.cliente_nombre = cliente_nombre;
+  if (cliente_direccion) updates.cliente_direccion = cliente_direccion;
+  if (cliente_telefono) updates.cliente_telefono = cliente_telefono;
 
-  // Validamos que al menos un campo se esté enviando
-  if (Object.keys(updates).length === 0) {
-    return res.status(400).json({ error: 'Se requiere al menos un campo para actualizar.' });
-  }
+  // Validamos que al menos un campo se esté enviando
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'Se requiere al menos un campo para actualizar.' });
+  }
 
-  // Lógica de negocio: Si asignamos un técnico, el status cambia a 'asignado'
-  // Esto sobreescribe cualquier status que se haya enviado, asegurando consistencia.
-  if (tecnico_id) {
-    updates.status = 'asignado';
-  }
+  // Lógica de negocio: Si asignamos un técnico, el status cambia a 'asignado'
+  // Esto sobreescribe cualquier status que se haya enviado, asegurando consistencia.
+  if (tecnico_id) {
+    updates.status = 'asignado';
+  }
 
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('casos')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('casos')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
 
-    if (error) throw error;
-    res.status(200).json(data);
-  } catch (error) {
-    console.error('Error al actualizar caso:', error);
-    res.status(500).json({ error: 'Error al actualizar el caso', details: error.message });
-D  }
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (error) {
+    console.error('Error al actualizar caso:', error);
+    res.status(500).json({ error: 'Error al actualizar el caso', details: error.message });
+    D
+  }
 };
 
 // --- NUEVO: Controlador para obtener un caso por ID ---
@@ -168,13 +169,13 @@ export const createCasoFromCotizacion = async (req, res) => {
     const { data: perfilTecnico, error: errorPerfil } = await supabaseAdmin
       .from('profiles')
       .select('ea_user_id')
-      .eq('id', tecnico_id) 
+      .eq('id', tecnico_id)
       .single();
 
     if (errorPerfil || !perfilTecnico?.ea_user_id) {
-       return res.status(400).json({ error: 'El técnico seleccionado no está sincronizado con la agenda (Falta ea_user_id).' });
+      return res.status(400).json({ error: 'El técnico seleccionado no está sincronizado con la agenda (Falta ea_user_id).' });
     }
-    
+
     const idProvider = perfilTecnico.ea_user_id; // ID numérico de E!A
 
     // --- CORRECCIÓN 1: VALIDACIÓN DE TRASLAPE (Issue 1) ---
@@ -187,14 +188,14 @@ export const createCasoFromCotizacion = async (req, res) => {
             (start_datetime < ? AND end_datetime > ?) -- Lógica estándar de traslape
         )
     `;
-    
+
     const [rows] = await eaPool.query(sqlCheck, [idProvider, fecha_fin, fecha_inicio]);
-    
+
     if (rows[0].total > 0) {
-        // Si encontramos citas, detenemos todo AQUÍ.
-        return res.status(409).json({ 
-            error: 'HORARIO NO DISPONIBLE: El técnico ya tiene una cita en ese rango de horas.' 
-        });
+      // Si encontramos citas, detenemos todo AQUÍ.
+      return res.status(409).json({
+        error: 'HORARIO NO DISPONIBLE: El técnico ya tiene una cita en ese rango de horas.'
+      });
     }
     // -------------------------------------------------------
 
@@ -204,7 +205,7 @@ export const createCasoFromCotizacion = async (req, res) => {
       .insert({
         cliente_nombre,
         cliente_direccion,
-        tecnico_id, 
+        tecnico_id,
         tipo: 'proyecto',
         status: 'asignado'
         // origen_cotizacion_id: cotizacionId // (Borrado para evitar error de columna)
@@ -218,10 +219,10 @@ export const createCasoFromCotizacion = async (req, res) => {
     const hash = randomBytes(16).toString('hex');
 
     // 4. Insertar Cita en Easy!Appointments (CORRECCIÓN Issue 2)
-    
+
     // --- TUS IDs REALES ---
-    const EA_SERVICE_ID = 1;   
-    const EA_CUSTOMER_ID = 21; 
+    const EA_SERVICE_ID = 1;
+    const EA_CUSTOMER_ID = 21;
     // ----------------------
 
     const eaQuery = `
@@ -229,7 +230,7 @@ export const createCasoFromCotizacion = async (req, res) => {
       (book_datetime, start_datetime, end_datetime, notes, hash, is_unavailable, id_users_provider, id_users_customer, id_services)
       VALUES (NOW(), ?, ?, ?, ?, 0, ?, ?, ?); 
     `;
-    
+
     // NOTA: Mira los últimos 3 signos de interrogación (?, ?, ?)
     // Corresponden a: Provider, Customer, Service
 

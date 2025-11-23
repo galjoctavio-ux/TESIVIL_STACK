@@ -57,14 +57,20 @@ const DiaTimeline = ({ date }) => {
 
   useEffect(() => {
     // Auto-scroll to current time if the view is for today
-    if (dayjs(date).isSame(dayjs(), 'day') && timelineRef.current) {
-      const currentHour = dayjs().hour();
-      const hourEl = timelineRef.current.querySelector(`#hora-${currentHour}`);
-      if (hourEl) {
-        hourEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+    if (!isLoading && dayjs(date).isSame(dayjs(), 'day')) {
+      // Small timeout to ensure DOM is fully rendered
+      setTimeout(() => {
+        if (timelineRef.current) {
+          const currentHour = dayjs().hour();
+          // Scroll to current hour
+          const hourEl = timelineRef.current.querySelector(`#hora-${currentHour}`);
+          if (hourEl) {
+            hourEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      }, 100);
     }
-  }, []); // Run only on initial mount
+  }, [date, isLoading]);
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
@@ -116,7 +122,7 @@ const DiaTimeline = ({ date }) => {
                     <div className="cita-actions"> {/* --- Botón de Mapa (Siempre visible) --- */} <button className="cita-icon-button" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cita.caso.cliente_direccion)}`, "_blank")} title="Abrir en Google Maps" > 📍 </button>
                       {/* --- Botón de Revisar (Lógica condicional) --- */} {(cita.caso.tipo !== 'levantamiento' && cita.caso.status !== 'completado') && (
                         <Link to={`/revision/${cita.caso.id}`} className="cita-icon-button" title="Iniciar Revisión" > 📝 </Link>)}
-                      {/* --- Botón de Cotizar (Lógica condicional) --- */} {cita.caso.status !== 'completado' && (
+                      {/* --- Botón de Cotizar (Lógica condicional) --- */} {(cita.caso.status !== 'completado' || cita.caso.tipo === 'alto_consumo') && (
                         <Link to="/cotizador" state={{ casoId: cita.caso.id, clienteNombre: cita.caso.cliente_nombre, clienteDireccion: cita.caso.cliente_direccion /* No pasamos clienteTelefono, tal como se especificó */ }} className="cita-icon-button" title="Crear Cotización" > ⚡ </Link>)}
                       {/* --- Botón de Detalles (Nuevo) --- */}
                       <Link to={`/detalle-caso/${cita.caso.id}`} className="cita-icon-button" title="Ver Detalles del Caso">

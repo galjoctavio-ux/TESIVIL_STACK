@@ -41,6 +41,7 @@ const DatePickerFAB = ({ onDateSelect }) => {
         selected={startDate}
         onChange={handleChange}
         customInput={<CustomInput />}
+        popperPlacement="top-start"
       />
     </div>
   );
