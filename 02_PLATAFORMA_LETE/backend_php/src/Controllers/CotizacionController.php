@@ -388,5 +388,18 @@ class CotizacionController {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
+
+    public function listarCotizacionesAdmin(): void {
+        try {
+            // Llamamos al servicio que ya tiene la consulta SQL lista
+            $cotizaciones = $this->calculosService->obtenerListadoCotizaciones();
+            
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'success', 'data' => $cotizaciones]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
 }
 ?>
