@@ -80,7 +80,7 @@ function TecnicosList({ onTecnicoActualizado }) {
   // --- NUEVA FUNCIÓN: ENVIAR NOTIFICACIÓN ---
   const handleTestPush = async (tecnico) => {
     // Usamos 'id' (el numérico de Easy!Appointments)
-    const targetId = tecnico.id;
+    const targetId = tecnico.ea_id;
 
     if (!targetId) {
       alert("Error: No se encontró el ID numérico de este técnico. Verifica que la API devuelva el campo 'id'.");
