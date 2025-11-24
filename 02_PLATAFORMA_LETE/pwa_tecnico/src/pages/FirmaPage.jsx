@@ -1,28 +1,30 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react'; // Quitamos useEffect innecesario
 import SignatureCanvas from 'react-signature-canvas';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabaseClient'; // Ajusta la ruta según tu estructura
+import { supabase } from '../supabaseClient';
+import { useAuth } from '../context/AuthContext'; // 1. Importamos el contexto
 
 const FirmaPage = () => {
     const sigCanvas = useRef({});
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
-    const [user, setUser] = useState(null);
     const [feedback, setFeedback] = useState({ type: '', message: '' });
 
-    useEffect(() => {
-        const getUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) setUser(user);
-        };
-        getUser();
-    }, []);
+    // 2. Usamos el usuario y token REALES del contexto
+    // Ya no necesitamos un estado local 'user' ni el useEffect para buscarlo
+    const { user, token } = useAuth();
 
     const clear = () => sigCanvas.current.clear();
 
     const save = async () => {
         if (sigCanvas.current.isEmpty()) {
             setFeedback({ type: 'error', message: 'Por favor firma antes de guardar.' });
+            return;
+        }
+
+        // Validación de seguridad inicial
+        if (!user || !token) {
+            setFeedback({ type: 'error', message: 'Error de sesión. Vuelve a iniciar sesión.' });
             return;
         }
 
@@ -33,30 +35,44 @@ const FirmaPage = () => {
             const dataURL = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
             const blob = await (await fetch(dataURL)).blob();
 
-            if (!user) throw new Error('Usuario no autenticado');
+            // 3. INYECCIÓN DE SESIÓN (El truco mágico)
+            // Le decimos a Supabase: "Usa este token que me dio el backend"
+            // Usamos el mismo token para refresh porque solo necesitamos que funcione 
+            // la subida inmediata, no necesitamos mantener la sesión viva por horas aquí.
+            const { error: sessionError } = await supabase.auth.setSession({
+                access_token: token,
+                refresh_token: token
+            });
+
+            if (sessionError) {
+                console.warn("Advertencia al establecer sesión manual:", sessionError);
+                // No lanzamos error aquí porque a veces el refresh falla pero el access_token 
+                // sigue siendo válido para la subida. Continuamos.
+            }
 
             const fileName = `firma-ingeniero-${user.id}-${Date.now()}.png`;
             const filePath = `firmas/${fileName}`;
 
-            // 1. Subir imagen al Storage
+            // 4. Subir imagen al Storage (Ahora sí lleva el token Authorization)
             const { error: uploadError } = await supabase.storage
-                .from('reportes') // Usamos el bucket 'reportes' o 'firmas' según tu estructura
+                .from('reportes')
                 .upload(filePath, blob, { contentType: 'image/png', upsert: true });
 
             if (uploadError) throw uploadError;
 
-            // 2. Obtener URL pública
+            // 5. Obtener URL pública
             const { data: urlData } = supabase.storage
                 .from('reportes')
                 .getPublicUrl(filePath);
 
             const publicUrl = urlData.publicUrl;
 
-            // 3. Actualizar perfil del usuario
+            // 6. Actualizar perfil del usuario
+            // Nota: Usamos la tabla 'profiles' directamente.
             const { error: updateError } = await supabase
                 .from('profiles')
                 .update({ firma_url: publicUrl })
-                .eq('user_id', user.id);
+                .eq('user_id', user.id); // Asegúrate que tu columna en BD sea 'user_id' o 'id'
 
             if (updateError) throw updateError;
 
@@ -65,7 +81,7 @@ const FirmaPage = () => {
 
         } catch (error) {
             console.error('Error guardando firma:', error);
-            setFeedback({ type: 'error', message: 'Error al guardar la firma. Inténtalo de nuevo.' });
+            setFeedback({ type: 'error', message: `Error: ${error.message || 'No se pudo guardar'}` });
         } finally {
             setLoading(false);
         }
