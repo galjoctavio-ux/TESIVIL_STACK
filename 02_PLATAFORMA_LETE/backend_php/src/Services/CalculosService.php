@@ -7,14 +7,14 @@ class CalculosService {
     private PDO $db;
     private array $config;       // Configuración de costos (IVA, Indirectos, etc.)
     private array $globalConfig; // Configuración de anticipos
-    private array $systemConfig; // ¡NUEVO! Reglas de negocio (límites, bloqueos)
+    private array $systemConfig; // Reglas de negocio (límites, bloqueos)
 
     public function __construct() {
         $database = new Database();
         $this->db = $database->getConnection();
         $this->cargarConfiguracion();
         $this->cargarConfiguracionGlobal();
-        $this->cargarConfiguracionSistema(); // ¡NUEVO!
+        $this->cargarConfiguracionSistema();
     }
 
     private function cargarConfiguracion(): void {
@@ -29,7 +29,6 @@ class CalculosService {
         $this->globalConfig = $stmt->fetch() ?: [];
     }
 
-    // ¡NUEVO! Carga las reglas de bloqueo (Límites de dinero, factores, etc.)
     private function cargarConfiguracionSistema(): void {
         try {
             $stmt = $this->db->query("SELECT clave, valor FROM configuracion_sistema");
@@ -37,7 +36,6 @@ class CalculosService {
                 $this->systemConfig[$row['clave']] = floatval($row['valor']);
             }
         } catch (PDOException $e) {
-            // Fallback si la tabla no existe aún o está vacía
             $this->systemConfig = [
                 'limite_monto_auto' => 5000.00,
                 'factor_rentabilidad_min' => 2.2,
@@ -46,8 +44,7 @@ class CalculosService {
         }
     }
 
-    // --- NUEVO: EL JUEZ FINANCIERO ---
-    // Revisa las reglas matemáticas antes de llamar a la IA
+    // --- VALIDACIÓN DE REGLAS FINANCIERAS ---
     public function validarReglasFinancieras(array $totales): array {
         $razones = [];
         
@@ -57,7 +54,7 @@ class CalculosService {
             $razones[] = "Monto total ($" . number_format($totales['total_venta'], 2) . ") excede el límite automático de $" . number_format($limiteAuto, 2);
         }
 
-        // 2. Regla de Rentabilidad (Si hay materiales)
+        // 2. Regla de Rentabilidad
         if ($totales['materiales_cd'] > 0) {
             $factorRentabilidad = $totales['subtotal'] / $totales['materiales_cd'];
             $factorMin = $this->systemConfig['factor_rentabilidad_min'] ?? 2.2;
@@ -67,7 +64,7 @@ class CalculosService {
             }
         }
 
-        // 3. Regla de Solo Mano de Obra (Riesgo alto si no hay materiales)
+        // 3. Regla de Solo Mano de Obra
         if ($totales['materiales_cd'] <= 0 && $totales['mano_obra_cd'] > 0) {
             $limiteMO = $this->systemConfig['limite_solo_mano_obra'] ?? 2000.0;
             if ($totales['total_venta'] > $limiteMO) {
@@ -81,11 +78,12 @@ class CalculosService {
         ];
     }
 
+    // --- CÁLCULO DE COTIZACIÓN ---
     public function calcularCotizacion(array $items, array $manoDeObraItems, float $descuentoPct = 0.0): array {
         $totalMaterialesCD = 0.0;
         $itemsCalculados = [];
 
-        // --- 1. CÁLCULO DE MATERIALES ---
+        // 1. CÁLCULO DE MATERIALES
         foreach ($items as $item) {
             $stmt = $this->db->prepare("SELECT * FROM recursos WHERE id = ?");
             $stmt->execute([$item['id_recurso']]);
@@ -118,24 +116,22 @@ class CalculosService {
             ];
         }
 
-        // --- 2. CÁLCULO DE MANO DE OBRA ---
+        // 2. CÁLCULO DE MANO DE OBRA
         $horasTecnicoTotal = 0.0;
         foreach ($manoDeObraItems as $tarea) {
             $horasTecnicoTotal += floatval($tarea['horas']);
         }
         
-        // CAMBIO: Ahora leemos de $this->config en lugar de usar fijos
         $costoHoraTecnico = floatval($this->config['COSTO_HORA_TECNICO'] ?? 120.00); 
         $costoHoraSupervisor = floatval($this->config['COSTO_HORA_SUPERVISOR'] ?? 250.00); 
         
         $costoBaseTecnico = $horasTecnicoTotal * $costoHoraTecnico;
         $costoBaseSupervisor = ($horasTecnicoTotal * ($this->config['PCT_SUPERVISION'] / 100)) * $costoHoraSupervisor;
         
-        // Usamos FASAR de la config o 1.0 si no existe
         $fasar = floatval($this->config['FASAR'] ?? 1.0);
         $totalManoObraCD = ($costoBaseTecnico + $costoBaseSupervisor) * $fasar;
 
-        // --- 3. CÁLCULOS FINALES ---
+        // 3. CÁLCULOS FINALES
         $costoHerramienta = $totalManoObraCD * ($this->config['PCT_HERRAMIENTA'] / 100);
         $costoVehiculo = $totalManoObraCD * ($this->config['PCT_VEHICULO'] / 100);
         $cdt = $totalMaterialesCD + $totalManoObraCD + $costoHerramienta + $costoVehiculo;
@@ -185,9 +181,7 @@ class CalculosService {
         ];
     }
 
-    /**
-     * ¡ACTUALIZADO! Ahora recibe Estado, Razón de Detención y Estimación IA
-     */
+    // --- GUARDAR COTIZACIÓN ---
     public function guardarCotizacion(
         array $resultadoCalculo,
         string $tecnicoId,
@@ -199,59 +193,75 @@ class CalculosService {
         ?int $caso_id = null,
         float $descuentoPct = 0.0
     ): array {
-        // Esta función ahora asume que una transacción ya ha sido iniciada si es necesario.
         try {
             $uuid = bin2hex(random_bytes(16));
             $totales = $resultadoCalculo['totales'];
 
             $sqlHeader = "INSERT INTO cotizaciones 
                 (uuid, tecnico_id_externo, tecnico_nombre, cliente_nombre, cliente_email, cliente_telefono, direccion_obra,
-                 horas_estimadas_tecnico,
-                 total_materiales_cd, total_mano_obra_cd, 
+                 horas_estimadas_tecnico, total_materiales_cd, total_mano_obra_cd, 
                  subtotal_venta, monto_iva, precio_venta_final, monto_anticipo, 
                  descuento_pct, estado, razon_detencion, estimacion_ia, caso_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             
             $this->db->prepare($sqlHeader)->execute([
-                $uuid, $tecnicoId, $tecnicoNombre, $clienteData['nombre'], $clienteData['email'], $clienteData['telefono'], $clienteData['direccion'],
+                $uuid, $tecnicoId, $tecnicoNombre, 
+                $clienteData['nombre'], $clienteData['email'], 
+                $clienteData['telefono'] ?? null, $clienteData['direccion'] ?? '',
                 $totales['horas_totales_calculadas'],
                 $totales['materiales_cd'], $totales['mano_obra_cd'],
-                $totales['subtotal'],
-                $totales['iva'], $totales['total_venta'], $totales['anticipo_sugerido'],
-                $descuentoPct,
+                $totales['subtotal'], $totales['iva'], $totales['total_venta'], 
+                $totales['anticipo_sugerido'], $descuentoPct,
                 $estado, $razonDetencion, $estimacionIA, $caso_id
             ]);
 
             $cotizacionId = $this->db->lastInsertId();
 
-            $stmtItem = $this->db->prepare("INSERT INTO cotizaciones_items (cotizacion_id, recurso_id, cantidad, precio_base_capturado, colchon_aplicado_pct, precio_con_colchon, desperdicio_aplicado_pct, costo_final_calculado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            // Guardar items
+            $stmtItem = $this->db->prepare("INSERT INTO cotizaciones_items 
+                (cotizacion_id, recurso_id, cantidad, precio_base_capturado, colchon_aplicado_pct, 
+                 precio_con_colchon, desperdicio_aplicado_pct, costo_final_calculado) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            
             foreach ($resultadoCalculo['desglose_items'] as $item) {
                 $stmtItem->execute([
-                    $cotizacionId, $item['id_recurso_ref'], $item['cantidad'], $item['precio_base_capturado'],
-                    $item['colchon_aplicado_pct'], $item['precio_con_colchon'], $item['desperdicio_aplicado_pct'], $item['costo_final_calculado']
+                    $cotizacionId, $item['id_recurso_ref'], $item['cantidad'], 
+                    $item['precio_base_capturado'], $item['colchon_aplicado_pct'], 
+                    $item['precio_con_colchon'], $item['desperdicio_aplicado_pct'], 
+                    $item['costo_final_calculado']
                 ]);
             }
 
-            $stmtMO = $this->db->prepare("INSERT INTO cotizaciones_mano_de_obra (cotizacion_id, descripcion, horas) VALUES (?, ?, ?)");
+            // Guardar mano de obra
+            $stmtMO = $this->db->prepare("INSERT INTO cotizaciones_mano_de_obra 
+                (cotizacion_id, descripcion, horas) VALUES (?, ?, ?)");
+            
             foreach ($resultadoCalculo['desglose_mo'] as $tarea) {
-                $stmtMO->execute([$cotizacionId, $tarea['descripcion'], floatval($tarea['horas'])]);
+                $stmtMO->execute([
+                    $cotizacionId, 
+                    $tarea['descripcion'], 
+                    floatval($tarea['horas'])
+                ]);
             }
 
             return ['uuid' => $uuid, 'cotizacionId' => $cotizacionId];
 
         } catch (Exception $e) {
-            // No hacemos rollback aquí, dejamos que el llamador lo maneje.
             throw new Exception("Error durante el guardado de la cotización: " . $e->getMessage());
         }
     }
 
+    // --- OBTENER COTIZACIÓN ---
     public function obtenerCotizacionPorUuid(string $uuid): ?array {
         $stmt = $this->db->prepare("SELECT * FROM cotizaciones WHERE uuid = ? LIMIT 1");
         $stmt->execute([$uuid]);
         $cotizacion = $stmt->fetch();
         if (!$cotizacion) return null;
 
-        $sqlItems = "SELECT ci.*, r.nombre, r.unidad FROM cotizaciones_items ci JOIN recursos r ON ci.recurso_id = r.id WHERE ci.cotizacion_id = ?";
+        $sqlItems = "SELECT ci.*, r.nombre, r.unidad 
+                     FROM cotizaciones_items ci 
+                     JOIN recursos r ON ci.recurso_id = r.id 
+                     WHERE ci.cotizacion_id = ?";
         $stmtItems = $this->db->prepare($sqlItems);
         $stmtItems->execute([$cotizacion['id']]);
         
@@ -269,50 +279,44 @@ class CalculosService {
         ];
     }
 
+    // --- GESTIÓN DE RECURSOS ---
     public function obtenerRecursosActivos(): array {
         $sql = "SELECT id, nombre, unidad, precio_costo_base, tipo, tiempo_instalacion_min 
                 FROM recursos WHERE activo = 1 AND estatus = 'APROBADO' ORDER BY nombre ASC";
         return $this->db->query($sql)->fetchAll();
     }
 
-    // --- ESTA ES LA FUNCIÓN MODIFICADA ---
     public function obtenerInventarioTotal(): array {
-        // Hacemos JOIN con materiales_proveedores para obtener el SKU y la fecha de XML
-        // Usamos LEFT JOIN porque quizás algunos recursos manuales no tengan proveedor.
-        $sql = "SELECT 
-                    r.*, 
-                    mp.sku_proveedor, 
-                    mp.fecha_ultimo_xml 
+        $sql = "SELECT r.*, mp.sku_proveedor, mp.fecha_ultimo_xml 
                 FROM recursos r 
                 LEFT JOIN materiales_proveedores mp ON r.id = mp.recurso_id 
                 WHERE r.activo = 1 
                 ORDER BY FIELD(r.estatus, 'PENDIENTE_TECNICO', 'APROBADO'), r.nombre ASC";
-        
         return $this->db->query($sql)->fetchAll();
     }
 
-    // --- FIRMA DE FUNCIÓN MODIFICADA ---
     public function crearNuevoRecurso(string $nombre, string $unidad, float $precioTotal, string $estatus = 'PENDIENTE_TECNICO'): array {
-
-        // --- CÁLCULO DE IVA AÑADIDO ---
-        // Usamos la configuración de IVA que ya cargamos en el constructor
         $ivaPct = $this->config['PCT_IVA'] ?? 16.0;
         $precioBase = $precioTotal / (1 + ($ivaPct / 100));
-        // --- FIN CÁLCULO ---
 
-        $sql = "INSERT INTO recursos (nombre, unidad, tipo, precio_costo_base, estatus) VALUES (?, ?, 'MATERIAL', ?, ?)";
+        $sql = "INSERT INTO recursos (nombre, unidad, tipo, precio_costo_base, estatus) 
+                VALUES (?, ?, 'MATERIAL', ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$nombre, $unidad, $precioBase, $estatus]); // <-- Guardamos el precioBase calculado
-        return ['id' => (int)$this->db->lastInsertId(), 'nombre' => $nombre, 'unidad' => $unidad, 'precio_costo_base' => $precioBase, 'tipo' => 'MATERIAL'];
+        $stmt->execute([$nombre, $unidad, $precioBase, $estatus]);
+        
+        return [
+            'id' => (int)$this->db->lastInsertId(), 
+            'nombre' => $nombre, 
+            'unidad' => $unidad, 
+            'precio_costo_base' => $precioBase, 
+            'tipo' => 'MATERIAL'
+        ];
     }
 
     public function actualizarRecurso(int $id, string $nombre, float $precio, int $tiempo, string $unidad): void {
         $sql = "UPDATE recursos 
-                SET nombre = ?, 
-                    precio_costo_base = ?, 
-                    tiempo_instalacion_min = ?,
-                    unidad = ?,
-                    fecha_actualizacion_costo = NOW() 
+                SET nombre = ?, precio_costo_base = ?, tiempo_instalacion_min = ?,
+                    unidad = ?, fecha_actualizacion_costo = NOW() 
                 WHERE id = ?";
         $this->db->prepare($sql)->execute([$nombre, $precio, $tiempo, $unidad, $id]);
     }
@@ -322,66 +326,75 @@ class CalculosService {
         $this->db->prepare($sql)->execute([$id]);
     }
 
-    // --- FUNCIÓN FALTANTE PARA EL PANEL ADMIN ---
-    public function obtenerListadoCotizaciones(): array {
-        $sql = "SELECT 
-                    id, 
-                    uuid, 
-                    tecnico_nombre, 
-                    cliente_nombre, 
-                    precio_venta_final, 
-                    total_materiales_cd,
-                    descuento_pct,
-                    estimacion_ia,
-                    razon_detencion,
-                    estado, 
-                    fecha_creacion,
-                    direccion_obra
-                FROM cotizaciones 
-                ORDER BY fecha_creacion DESC";
-                
-        return $this->db->query($sql)->fetchAll();
-    }
-
     public function aprobarRecurso(int $id): void {
-        // Actualizamos el estatus para que sea visible en el cotizador
         $sql = "UPDATE recursos SET estatus = 'APROBADO' WHERE id = ?";
         $this->db->prepare($sql)->execute([$id]);
     }
 
-    // --- FUNCIÓN RECUPERADA ---
-    public function obtenerTextoMateriales(int $cotizacionId): string {
-        $sql = "SELECT ci.cantidad, r.unidad, r.nombre 
-                FROM cotizaciones_items ci
-                JOIN recursos r ON ci.recurso_id = r.id
-                WHERE ci.cotizacion_id = ?
-                ORDER BY r.nombre ASC";
-
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([$cotizacionId]);
-        $items = $stmt->fetchAll();
-        
-        if (empty($items)) return "Esta cotización no tiene materiales registrados.";
-
-        $texto = "LISTA DE MATERIALES - Cotización #" . $cotizacionId . "\n";
-        $texto .= "===========================================\n\n";
-        foreach ($items as $item) {
-            $texto .= floatval($item['cantidad']) . " " . $item['unidad'] . " - " . $item['nombre'] . "\n";
-        }
-        return $texto;
+    // --- LISTADO Y GESTIÓN DE COTIZACIONES ---
+    public function obtenerListadoCotizaciones(): array {
+        $sql = "SELECT id, uuid, tecnico_nombre, cliente_nombre, precio_venta_final, 
+                       total_materiales_cd, descuento_pct, estimacion_ia, razon_detencion, 
+                       estatus, estado, fecha_creacion, direccion_obra
+                FROM cotizaciones 
+                ORDER BY fecha_creacion DESC";
+        return $this->db->query($sql)->fetchAll();
     }
 
+    public function obtenerDetalleCotizacionPorId(int $id): ?array {
+        $stmt = $this->db->prepare("SELECT * FROM cotizaciones WHERE id = ?");
+        $stmt->execute([$id]);
+        $header = $stmt->fetch();
+        
+        if (!$header) return null;
+
+        $sqlMat = "SELECT ci.*, r.nombre, r.unidad, r.precio_costo_base 
+                   FROM cotizaciones_items ci 
+                   JOIN recursos r ON ci.recurso_id = r.id 
+                   WHERE ci.cotizacion_id = ?";
+        $stmtMat = $this->db->prepare($sqlMat);
+        $stmtMat->execute([$id]);
+        
+        $sqlMO = "SELECT * FROM cotizaciones_mano_de_obra WHERE cotizacion_id = ?";
+        $stmtMO = $this->db->prepare($sqlMO);
+        $stmtMO->execute([$id]);
+
+        return [
+            'header' => $header,
+            'materiales' => $stmtMat->fetchAll(),
+            'mano_obra' => $stmtMO->fetchAll(),
+            'config_sistema' => $this->config
+        ];
+    }
+
+    // --- GESTIÓN DE ESTADOS ---
+    public function actualizarEstadoCotizacion(int $id, string $nuevoEstado): void {
+        $sql = "UPDATE cotizaciones SET estado = ? WHERE id = ?";
+        $this->db->prepare($sql)->execute([$nuevoEstado, $id]);
+    }
+
+    public function obtenerDatosEnvio(int $id): array {
+        $sql = "SELECT uuid, cliente_email, cliente_nombre FROM cotizaciones WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$id]);
+        return $stmt->fetch() ?: [];
+    }
+
+    // --- RECÁLCULO CON DESCUENTO ---
     public function recalcularConDescuento(int $cotizacionId, float $descuentoPct): array {
-        $itemsStmt = $this->db->prepare("SELECT recurso_id as id_recurso, cantidad FROM cotizaciones_items WHERE cotizacion_id = ?");
+        $itemsStmt = $this->db->prepare("SELECT recurso_id as id_recurso, cantidad 
+                                          FROM cotizaciones_items WHERE cotizacion_id = ?");
         $itemsStmt->execute([$cotizacionId]);
         $items = $itemsStmt->fetchAll();
 
-        $moStmt = $this->db->prepare("SELECT descripcion, horas FROM cotizaciones_mano_de_obra WHERE cotizacion_id = ?");
+        $moStmt = $this->db->prepare("SELECT descripcion, horas 
+                                       FROM cotizaciones_mano_de_obra WHERE cotizacion_id = ?");
         $moStmt->execute([$cotizacionId]);
         $manoDeObraItems = $moStmt->fetchAll();
 
         if (empty($manoDeObraItems)) {
-            $cotiStmt = $this->db->prepare("SELECT horas_estimadas_tecnico FROM cotizaciones WHERE id = ?");
+            $cotiStmt = $this->db->prepare("SELECT horas_estimadas_tecnico 
+                                             FROM cotizaciones WHERE id = ?");
             $cotiStmt->execute([$cotizacionId]);
             $horas = $cotiStmt->fetchColumn();
             $manoDeObraItems = [['descripcion' => 'Mano de Obra General', 'horas' => $horas ?: 0]];
@@ -390,59 +403,92 @@ class CalculosService {
         $resultadoCalculo = $this->calcularCotizacion($items, $manoDeObraItems, $descuentoPct);
         $totales = $resultadoCalculo['totales'];
 
-        $sql = "UPDATE cotizaciones SET subtotal_venta = ?, monto_iva = ?, precio_venta_final = ?, monto_anticipo = ?, descuento_pct = ? WHERE id = ?";
+        $sql = "UPDATE cotizaciones 
+                SET subtotal_venta = ?, monto_iva = ?, precio_venta_final = ?, 
+                    monto_anticipo = ?, descuento_pct = ? 
+                WHERE id = ?";
         $this->db->prepare($sql)->execute([
-            $totales['subtotal'], $totales['iva'], $totales['total_venta'], $totales['anticipo_sugerido'], $descuentoPct, $cotizacionId
+            $totales['subtotal'], $totales['iva'], $totales['total_venta'], 
+            $totales['anticipo_sugerido'], $descuentoPct, $cotizacionId
         ]);
 
-        $infoStmt = $this->db->prepare("SELECT uuid, cliente_email, cliente_nombre FROM cotizaciones WHERE id = ?");
+        $infoStmt = $this->db->prepare("SELECT uuid, cliente_email, cliente_nombre 
+                                         FROM cotizaciones WHERE id = ?");
         $infoStmt->execute([$cotizacionId]);
         $info = $infoStmt->fetch();
 
-        return ['uuid' => $info['uuid'], 'email' => $info['cliente_email'], 'nombre' => $info['cliente_nombre']];
-    }
-    // --- GESTIÓN DE ESTADOS (Fase 4) ---
-
-    // Cambia el estado (ej. de PENDIENTE a ENVIADA)
-    public function actualizarEstadoCotizacion(int $id, string $nuevoEstado): void {
-        $sql = "UPDATE cotizaciones SET estado = ? WHERE id = ?";
-        $this->db->prepare($sql)->execute([$nuevoEstado, $id]);
+        return [
+            'uuid' => $info['uuid'], 
+            'email' => $info['cliente_email'], 
+            'nombre' => $info['cliente_nombre']
+        ];
     }
 
-    // Recupera datos básicos para poder enviar el correo tras aprobar
-    public function obtenerDatosEnvio(int $id): array {
-        $sql = "SELECT uuid, cliente_email, cliente_nombre FROM cotizaciones WHERE id = ?";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([$id]);
-        return $stmt->fetch() ?: [];
+    // --- RECÁLCULO CON DESCUENTO ---
+    public function recalcularConDescuento(int $cotizacionId, float $descuentoPct): array {
+        $itemsStmt = $this->db->prepare("SELECT recurso_id as id_recurso, cantidad 
+                                          FROM cotizaciones_items WHERE cotizacion_id = ?");
+        $itemsStmt->execute([$cotizacionId]);
+        $items = $itemsStmt->fetchAll();
+
+        $moStmt = $this->db->prepare("SELECT descripcion, horas 
+                                       FROM cotizaciones_mano_de_obra WHERE cotizacion_id = ?");
+        $moStmt->execute([$cotizacionId]);
+        $manoDeObraItems = $moStmt->fetchAll();
+
+        if (empty($manoDeObraItems)) {
+            $cotiStmt = $this->db->prepare("SELECT horas_estimadas_tecnico 
+                                             FROM cotizaciones WHERE id = ?");
+            $cotiStmt->execute([$cotizacionId]);
+            $horas = $cotiStmt->fetchColumn();
+            $manoDeObraItems = [['descripcion' => 'Mano de Obra General', 'horas' => $horas ?: 0]];
+        }
+
+        $resultadoCalculo = $this->calcularCotizacion($items, $manoDeObraItems, $descuentoPct);
+        $totales = $resultadoCalculo['totales'];
+
+        $sql = "UPDATE cotizaciones 
+                SET subtotal_venta = ?, monto_iva = ?, precio_venta_final = ?, 
+                    monto_anticipo = ?, descuento_pct = ? 
+                WHERE id = ?";
+        $this->db->prepare($sql)->execute([
+            $totales['subtotal'], $totales['iva'], $totales['total_venta'], 
+            $totales['anticipo_sugerido'], $descuentoPct, $cotizacionId
+        ]);
+
+        $infoStmt = $this->db->prepare("SELECT uuid, cliente_email, cliente_nombre 
+                                         FROM cotizaciones WHERE id = ?");
+        $infoStmt->execute([$cotizacionId]);
+        $info = $infoStmt->fetch();
+
+        return [
+            'uuid' => $info['uuid'], 
+            'email' => $info['cliente_email'], 
+            'nombre' => $info['cliente_nombre']
+        ];
     }
-    // --- CIERRE FINANCIERO (Fase 6) ---
+
+    // --- CIERRE FINANCIERO ---
     public function finalizarProyecto(int $id, float $realMateriales, float $realManoObra): void {
-        // Marcamos como COMPLETADA y guardamos los gastos reales
-        $sql = "UPDATE cotizaciones SET 
-                estado = 'COMPLETADA',
-                costo_real_materiales = ?,
-                costo_real_mano_obra = ?
+        $sql = "UPDATE cotizaciones 
+                SET estado = 'COMPLETADA', costo_real_materiales = ?, costo_real_mano_obra = ?
                 WHERE id = ?";
         $this->db->prepare($sql)->execute([$realMateriales, $realManoObra, $id]);
     }
-    // --- VERSIONADO / CLONACIÓN (Corregido) ---
+
+    // --- CLONACIÓN ---
     public function clonarCotizacion(int $idOriginal): array {
         try {
             $this->db->beginTransaction();
 
-            // 1. Obtener datos originales
             $stmt = $this->db->prepare("SELECT * FROM cotizaciones WHERE id = ?");
             $stmt->execute([$idOriginal]);
             $original = $stmt->fetch();
 
             if (!$original) throw new Exception("Cotización original no encontrada.");
 
-            // 2. Crear Nueva Cabecera (Versión Hija)
             $nuevoUuid = bin2hex(random_bytes(16));
             
-            // CORRECCIÓN: Eliminamos el campo 'estatus' que causaba el error.
-            // Solo usamos 'estado' que es la columna que configuramos en la Fase 1.
             $sqlHeader = "INSERT INTO cotizaciones 
                 (uuid, tecnico_id_externo, tecnico_nombre, cliente_nombre, cliente_email, direccion_obra, 
                  horas_estimadas_tecnico, total_materiales_cd, total_mano_obra_cd, 
@@ -470,33 +516,33 @@ class CalculosService {
             
             $nuevoId = $this->db->lastInsertId();
 
-            // 3. Clonar Items de Materiales
+            // Clonar items
             $stmtItems = $this->db->prepare("SELECT * FROM cotizaciones_items WHERE cotizacion_id = ?");
             $stmtItems->execute([$idOriginal]);
             $items = $stmtItems->fetchAll();
 
-            $sqlInsertItem = "INSERT INTO cotizaciones_items (cotizacion_id, recurso_id, cantidad, precio_base_capturado, colchon_aplicado_pct, precio_con_colchon, desperdicio_aplicado_pct, costo_final_calculado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+            $sqlInsertItem = "INSERT INTO cotizaciones_items 
+                (cotizacion_id, recurso_id, cantidad, precio_base_capturado, colchon_aplicado_pct, 
+                 precio_con_colchon, desperdicio_aplicado_pct, costo_final_calculado) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
             $stmtNewItem = $this->db->prepare($sqlInsertItem);
 
             foreach ($items as $item) {
                 $stmtNewItem->execute([
-                    $nuevoId,
-                    $item['recurso_id'],
-                    $item['cantidad'],
-                    $item['precio_base_capturado'],
-                    $item['colchon_aplicado_pct'],
-                    $item['precio_con_colchon'],
-                    $item['desperdicio_aplicado_pct'],
+                    $nuevoId, $item['recurso_id'], $item['cantidad'],
+                    $item['precio_base_capturado'], $item['colchon_aplicado_pct'],
+                    $item['precio_con_colchon'], $item['desperdicio_aplicado_pct'],
                     $item['costo_final_calculado']
                 ]);
             }
 
-            // 4. Clonar Mano de Obra
+            // Clonar mano de obra
             $stmtMO = $this->db->prepare("SELECT * FROM cotizaciones_mano_de_obra WHERE cotizacion_id = ?");
             $stmtMO->execute([$idOriginal]);
             $tareas = $stmtMO->fetchAll();
 
-            $sqlInsertMO = "INSERT INTO cotizaciones_mano_de_obra (cotizacion_id, descripcion, horas) VALUES (?, ?, ?)";
+            $sqlInsertMO = "INSERT INTO cotizaciones_mano_de_obra 
+                (cotizacion_id, descripcion, horas) VALUES (?, ?, ?)";
             $stmtNewMO = $this->db->prepare($sqlInsertMO);
 
             foreach ($tareas as $t) {
@@ -535,7 +581,7 @@ class CalculosService {
                 $resultado,
                 $originalData['tecnico_id_externo'],
                 $originalData['tecnico_nombre'],
-                ['email' => $clienteEmail, 'nombre' => $clienteNombre, 'direccion' => ''],
+                ['email' => $clienteEmail, 'nombre' => $clienteNombre, 'direccion' => '', 'telefono' => null],
                 'ENVIADA',
                 null,
                 null,
@@ -556,58 +602,55 @@ class CalculosService {
             throw $e;
         }
     }
-    // --- EDICIÓN DE CONTENIDO (Fase Final) ---
+
+    // --- EDICIÓN DE CONTENIDO ---
     public function actualizarContenidoCotizacion(int $id, array $nuevosItems, array $nuevaMO, string $clienteEmail, string $clienteNombre): void {
         try {
             $this->db->beginTransaction();
 
-            // 1. Recalcular totales con los nuevos items
             $resultado = $this->calcularCotizacion($nuevosItems, $nuevaMO);
             $totales = $resultado['totales'];
 
-            // 2. Actualizar Cabecera (Montos y Cliente)
             $sqlHeader = "UPDATE cotizaciones SET 
-                cliente_email = ?, 
-                cliente_nombre = ?,
-                horas_estimadas_tecnico = ?,
-                total_materiales_cd = ?, 
-                total_mano_obra_cd = ?, 
-                subtotal_venta = ?, 
-                monto_iva = ?, 
-                precio_venta_final = ?, 
-                monto_anticipo = ?,
-                estado = 'ENVIADA', -- Al editar, la volvemos a enviar/validar
-                razon_detencion = NULL, -- Limpiamos alertas previas
-                estimacion_ia = NULL -- Limpiamos IA para que se recalcule si se desea (o podrías llamar a la IA aquí)
+                cliente_email = ?, cliente_nombre = ?, horas_estimadas_tecnico = ?,
+                total_materiales_cd = ?, total_mano_obra_cd = ?, subtotal_venta = ?, 
+                monto_iva = ?, precio_venta_final = ?, monto_anticipo = ?,
+                estado = 'ENVIADA', razon_detencion = NULL, estimacion_ia = NULL
                 WHERE id = ?";
             
             $this->db->prepare($sqlHeader)->execute([
                 $clienteEmail, $clienteNombre,
                 $totales['horas_totales_calculadas'], 
                 $totales['materiales_cd'], $totales['mano_obra_cd'], 
-                $totales['subtotal'], 
-                $totales['iva'], $totales['total_venta'], $totales['anticipo_sugerido'],
-                $id
+                $totales['subtotal'], $totales['iva'], $totales['total_venta'], 
+                $totales['anticipo_sugerido'], $id
             ]);
 
-            // 3. Borrar items viejos
+            // Borrar items viejos
             $this->db->prepare("DELETE FROM cotizaciones_items WHERE cotizacion_id = ?")->execute([$id]);
             $this->db->prepare("DELETE FROM cotizaciones_mano_de_obra WHERE cotizacion_id = ?")->execute([$id]);
 
-            // 4. Insertar nuevos items (Materiales)
-            $stmtItem = $this->db->prepare("INSERT INTO cotizaciones_items (cotizacion_id, recurso_id, cantidad, precio_base_capturado, colchon_aplicado_pct, precio_con_colchon, desperdicio_aplicado_pct, costo_final_calculado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            // Insertar nuevos items
+            $stmtItem = $this->db->prepare("INSERT INTO cotizaciones_items 
+                (cotizacion_id, recurso_id, cantidad, precio_base_capturado, colchon_aplicado_pct, 
+                 precio_con_colchon, desperdicio_aplicado_pct, costo_final_calculado) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            
             foreach ($resultado['desglose_items'] as $item) {
                 $stmtItem->execute([
                     $id, $item['id_recurso_ref'], $item['cantidad'], 
                     $item['precio_base_capturado'], $item['colchon_aplicado_pct'],
-                    $item['precio_con_colchon'], $item['desperdicio_aplicado_pct'], $item['costo_final_calculado']
+                    $item['precio_con_colchon'], $item['desperdicio_aplicado_pct'], 
+                    $item['costo_final_calculado']
                 ]);
             }
 
-            // 5. Insertar nueva MO
-            $stmtMO = $this->db->prepare("INSERT INTO cotizaciones_mano_de_obra (cotizacion_id, descripcion, horas) VALUES (?, ?, ?)");
+            // Insertar nueva MO
+            $stmtMO = $this->db->prepare("INSERT INTO cotizaciones_mano_de_obra 
+                (cotizacion_id, descripcion, horas) VALUES (?, ?, ?)");
+            
             foreach ($resultado['desglose_mo'] as $tarea) {
-                $stmtMO->execute([ $id, $tarea['descripcion'], floatval($tarea['horas']) ]);
+                $stmtMO->execute([$id, $tarea['descripcion'], floatval($tarea['horas'])]);
             }
 
             $this->db->commit();
@@ -617,76 +660,62 @@ class CalculosService {
             throw $e;
         }
     }
-    // --- DETALLE PARA EDITOR MAESTRO (Admin) ---
-    public function obtenerDetalleCotizacionPorId(int $id): ?array {
-        // 1. Header
-        $stmt = $this->db->prepare("SELECT * FROM cotizaciones WHERE id = ?");
-        $stmt->execute([$id]);
-        $header = $stmt->fetch();
-        
-        if (!$header) return null;
 
-        // 2. Materiales (Unimos con la tabla recursos para saber el nombre actual)
-        $sqlMat = "SELECT ci.*, r.nombre, r.unidad, r.precio_costo_base 
-                   FROM cotizaciones_items ci 
-                   JOIN recursos r ON ci.recurso_id = r.id 
-                   WHERE ci.cotizacion_id = ?";
-        $stmtMat = $this->db->prepare($sqlMat);
-        $stmtMat->execute([$id]);
+    // --- UTILIDADES ---
+    public function obtenerListaMaterialesExportar(int $cotizacionId): string {
+        $sql = "SELECT ci.cantidad, r.unidad, r.nombre 
+                FROM cotizaciones_items ci
+                JOIN recursos r ON ci.recurso_id = r.id
+                WHERE ci.cotizacion_id = ?
+                ORDER BY r.nombre ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$cotizacionId]);
+        $items = $stmt->fetchAll();
         
-        // 3. Mano de Obra
-        $sqlMO = "SELECT * FROM cotizaciones_mano_de_obra WHERE cotizacion_id = ?";
-        $stmtMO = $this->db->prepare($sqlMO);
-        $stmtMO->execute([$id]);
+        if (empty($items)) return "Esta cotización no tiene materiales registrados.";
 
-        return [
-            'header' => $header,
-            'materiales' => $stmtMat->fetchAll(),
-            'mano_obra' => $stmtMO->fetchAll(),
-            'config_sistema' => $this->config // Para mostrar porcentajes usados
-        ];
+        $texto = "LISTA DE MATERIALES - Cotización #" . $cotizacionId . "\n";
+        $texto .= "===========================================\n\n";
+        foreach ($items as $item) {
+            $texto .= floatval($item['cantidad']) . " " . $item['unidad'] . " - " . $item['nombre'] . "\n";
+        }
+        return $texto;
     }
 
-    /**
-     * Actualiza la URL del PDF para una cotización específica usando su UUID.
-     * @param string $uuid El UUID de la cotización.
-     * @param string $pdfUrl La URL pública del PDF generado.
-     */
     public function actualizarUrlPdf(string $uuid, string $pdfUrl): void {
         try {
             $sql = "UPDATE cotizaciones SET pdf_url = ? WHERE uuid = ?";
             $stmt = $this->db->prepare($sql);
             $stmt->execute([$pdfUrl, $uuid]);
         } catch (PDOException $e) {
-            // Log del error en lugar de detener la ejecución.
             error_log("Error al actualizar la URL del PDF para UUID $uuid: " . $e->getMessage());
-            // Opcional: relanzar la excepción si se considera un fallo crítico.
-            // throw new Exception("No se pudo actualizar la URL del PDF.");
         }
     }
 
-    /**
-     * Obtiene el nombre de un usuario a partir de su ID externo.
-     * @param string $userId El ID externo del usuario (de Firebase, etc.).
-     * @return string|null El nombre del usuario o null si no se encuentra.
-     */
     public function obtenerNombreUsuarioPorId(string $userId): ?string {
-        // FIX: Los usuarios están en la base de datos 'easyappointments'.
-        // Para evitar errores de conexión cruzada, retornamos NULL.
-        // Esto fuerza al Controlador a usar el nombre que ya viene desde el Frontend.
-        return null;
+        try {
+            // Se intenta obtener el nombre de la tabla local 'users'. 
+            // Si la arquitectura separa DBs, esto podría fallar, por lo que el catch lo maneja.
+            $sql = "SELECT nombre FROM users WHERE id_externo = ? LIMIT 1";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([$userId]);
+            $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($resultado && !empty($resultado['nombre'])) {
+                return $resultado['nombre'];
+            }
+            return null;
+        } catch (PDOException $e) {
+            error_log("Error al obtener nombre de usuario por ID ($userId): " . $e->getMessage());
+            return null;
+        }
     }
+
     public function contarCotizacionesPorCaso(string $tecnicoId): array {
-        $sql = "SELECT
-                    version_padre_id AS caso_id,
-                    COUNT(*) AS cot_count
-                FROM
-                    cotizaciones
-                WHERE
-                    tecnico_id_externo = ?
-                    AND version_padre_id IS NOT NULL
-                GROUP BY
-                    version_padre_id";
+        $sql = "SELECT version_padre_id AS caso_id, COUNT(*) AS cot_count
+                FROM cotizaciones
+                WHERE tecnico_id_externo = ? AND version_padre_id IS NOT NULL
+                GROUP BY version_padre_id";
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$tecnicoId]);
@@ -696,15 +725,9 @@ class CalculosService {
 
     public function obtenerRevisionCompletaPorId(int $revisionId): ?array {
         try {
-            // 1. Obtener la cabecera de la revisión
-            $sqlHeader = "SELECT
-                            r.id,
-                            r.fecha_creacion as fecha_revision,
-                            c.cliente_nombre,
-                            c.cliente_direccion,
-                            c.cliente_email,
-                            u.nombre as tecnico_nombre,
-                            r.firma_cliente_base64 as firma_base64
+            $sqlHeader = "SELECT r.id, r.fecha_creacion as fecha_revision,
+                            c.cliente_nombre, c.cliente_direccion, c.cliente_email,
+                            u.nombre as tecnico_nombre, r.firma_cliente_base64 as firma_base64
                           FROM revisiones r
                           LEFT JOIN casos c ON r.caso_id = c.id
                           LEFT JOIN users u ON r.tecnico_id = u.id_externo
@@ -712,27 +735,24 @@ class CalculosService {
             $stmtHeader = $this->db->prepare($sqlHeader);
             $stmtHeader->execute([$revisionId]);
             $header = $stmtHeader->fetch(PDO::FETCH_ASSOC);
+            
             if (!$header) return null;
 
-            // 2. Obtener mediciones
             $sqlMediciones = "SELECT * FROM revisiones_mediciones WHERE revision_id = ?";
             $stmtMediciones = $this->db->prepare($sqlMediciones);
             $stmtMediciones->execute([$revisionId]);
             $mediciones = $stmtMediciones->fetch(PDO::FETCH_ASSOC);
 
-            // 3. Obtener equipos
             $sqlEquipos = "SELECT * FROM revisiones_equipos WHERE revision_id = ?";
             $stmtEquipos = $this->db->prepare($sqlEquipos);
             $stmtEquipos->execute([$revisionId]);
             $equipos = $stmtEquipos->fetchAll(PDO::FETCH_ASSOC);
 
-            // 4. Obtener causas de alto consumo
             $sqlCausas = "SELECT causa FROM revisiones_causas_alto_consumo WHERE revision_id = ?";
             $stmtCausas = $this->db->prepare($sqlCausas);
             $stmtCausas->execute([$revisionId]);
             $causas = $stmtCausas->fetchAll(PDO::FETCH_COLUMN);
 
-            // 5. Obtener recomendaciones
             $sqlRecomendaciones = "SELECT recomendaciones FROM revisiones_recomendaciones WHERE revision_id = ?";
             $stmtRecomendaciones = $this->db->prepare($sqlRecomendaciones);
             $stmtRecomendaciones->execute([$revisionId]);

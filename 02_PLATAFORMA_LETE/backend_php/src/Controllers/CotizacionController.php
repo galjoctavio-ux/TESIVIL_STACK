@@ -4,7 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../Services/CalculosService.php';
 require_once __DIR__ . '/../Services/ResendService.php';
 require_once __DIR__ . '/../Services/GeminiService.php';
-require_once __DIR__ . '/PdfController.php'; // Incluimos el controlador de PDF
+require_once __DIR__ . '/PdfController.php';
 
 class CotizacionController {
     private CalculosService $calculosService;
@@ -18,9 +18,12 @@ class CotizacionController {
         $this->db = $database->getConnection();
     }
 
-    // 2. GUARDAR Y ENVIAR
+    // ==========================================
+    // 1. GESTIÓN PRINCIPAL (Guardar y Crear)
+    // ==========================================
+
     public function guardarCotizacion(): void {
-         // AUMENTAR EL TIEMPO LÍMITE DE EJECUCIÓN A 5 MINUTOS
+        // AUMENTAR EL TIEMPO LÍMITE DE EJECUCIÓN A 5 MINUTOS (Vital para PDFs)
         set_time_limit(300);
 
         $inputJSON = file_get_contents('php://input');
@@ -43,6 +46,7 @@ class CotizacionController {
             $resultado = $this->calculosService->calcularCotizacion($input['items'], $input['mano_de_obra']);
             $totales = $resultado['totales'];
 
+            // Estimación de IA para auditoría
             $itemsSimples = array_map(fn($item) => ['nombre' => $item['nombre'], 'cantidad' => $item['cantidad']], $resultado['desglose_items']);
             $estimacionIA = 0.0;
             try {
@@ -51,6 +55,7 @@ class CotizacionController {
                 error_log("Warning: IA audit failed but we continue. " . $e->getMessage());
             }
 
+            // Reglas de negocio
             $reglas = $this->calculosService->validarReglasFinancieras($totales);
             $estado = 'ENVIADA';
             $razonDetencion = null;
@@ -71,7 +76,7 @@ class CotizacionController {
             ];
 
             $nombreAsesorDesdeBD = $this->calculosService->obtenerNombreUsuarioPorId($input['tecnico_id']);
-            $tecnicoNombreFinal = $input['tecnico_nombre'] ?? 'Asesor de Servicio';
+            $tecnicoNombreFinal = $nombreAsesorDesdeBD ?? $input['tecnico_nombre'] ?? 'Asesor de Servicio';
             
             $guardadoResult = $this->calculosService->guardarCotizacion(
                 $resultado,
@@ -81,11 +86,12 @@ class CotizacionController {
                 $estado,
                 $razonDetencion,
                 $estimacionIA,
-                $input['caso_id'] // <-- PASAR EL ID DEL CASO
+                $input['caso_id']
             );
 
-            $uuid = $guardadoResult['uuid'];
-            $cotizacionId = $guardadoResult['cotizacionId'];
+            // Manejo de UUID e ID retornados
+            $uuid = is_array($guardadoResult) ? $guardadoResult['uuid'] : $guardadoResult; 
+            $cotizacionId = is_array($guardadoResult) ? ($guardadoResult['cotizacionId'] ?? null) : null;
 
             $pdfUrl = null;
             if ($uuid) {
@@ -117,7 +123,6 @@ class CotizacionController {
         }
     }
 
-    // Mantenemos los demás métodos intactos
     public function crearCotizacion(): void {
         $inputJSON = file_get_contents('php://input');
         $input = json_decode($inputJSON, true);
@@ -135,6 +140,11 @@ class CotizacionController {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
+
+    // ==========================================
+    // 2. GESTIÓN DE RECURSOS E INVENTARIO
+    // ==========================================
+
     public function listarRecursos(): void {
         try {
             $recursos = $this->calculosService->obtenerRecursosActivos();
@@ -145,25 +155,25 @@ class CotizacionController {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
+
     public function nuevoRecurso(): void {
         $input = json_decode(file_get_contents('php://input'), true);
 
-        // --- LÓGICA MODIFICADA ---
-        // Leemos el 'precio_total' que envía la PWA
         if (!isset($input['precio_total'])) {
             http_response_code(400);
             echo json_encode(['error' => 'Falta el campo precio_total']);
             return;
         }
         $precioTotal = floatval($input['precio_total']);
-        // --- FIN LÓGICA MODIFICADA ---
 
         if (empty($input['nombre']) || empty($input['unidad'])) {
-            // ... (el resto de tu validación)
+             http_response_code(400);
+             echo json_encode(['error' => 'Faltan datos (nombre, unidad)']);
+             return;
         }
         try {
             $estatus = $input['estatus'] ?? 'PENDIENTE_TECNICO';
-            $nuevoRecurso = $this->calculosService->crearNuevoRecurso($input['nombre'], $input['unidad'], $precioTotal, $estatus); // <-- CAMBIADO
+            $nuevoRecurso = $this->calculosService->crearNuevoRecurso($input['nombre'], $input['unidad'], $precioTotal, $estatus);
             header('Content-Type: application/json');
             echo json_encode(['status' => 'success', 'data' => $nuevoRecurso]);
         } catch (Exception $e) {
@@ -171,6 +181,7 @@ class CotizacionController {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
+
     public function listarInventarioAdmin(): void {
         try {
             $recursos = $this->calculosService->obtenerInventarioTotal();
@@ -181,6 +192,7 @@ class CotizacionController {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
+
     public function aprobarRecurso(): void {
         $input = json_decode(file_get_contents('php://input'), true);
         if (empty($input['id'])) {
@@ -195,17 +207,22 @@ class CotizacionController {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
+
     public function editarRecurso(): void {
         $input = json_decode(file_get_contents('php://input'), true);
-        if (empty($input['id']) || empty($input['nombre']) || !isset($input['precio']) || !isset($input['tiempo']) || empty($input['unidad'])) { // Añadido unidad
+        if (empty($input['id']) || empty($input['nombre']) || !isset($input['precio']) || !isset($input['tiempo']) || empty($input['unidad'])) {
             http_response_code(400);
             echo json_encode(['error' => 'Datos incompletos']); return;
         }
         try {
-            $this->calculosService->actualizarRecurso((int)$input['id'], $input['nombre'], floatval($input['precio']), (int)$input['tiempo'], $input['unidad']); // Añadido unidad
+            $this->calculosService->actualizarRecurso((int)$input['id'], $input['nombre'], floatval($input['precio']), (int)$input['tiempo'], $input['unidad']);
             echo json_encode(['status' => 'success', 'message' => 'Actualizado']);
-        } catch (Exception $e) { /* ... */ }
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
     }
+
     public function eliminarRecurso(): void {
         $input = json_decode(file_get_contents('php://input'), true);
         if (empty($input['id'])) {
@@ -221,26 +238,61 @@ class CotizacionController {
         }
     }
 
-    public function agendarCotizacion(): void {
+    // ==========================================
+    // 3. GESTIÓN DE ESTADOS Y ACCIONES (Admin)
+    // ==========================================
+
+    public function listarCotizacionesAdmin(): void {
+        try {
+            $cotizaciones = $this->calculosService->obtenerListadoCotizaciones();
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'success', 'data' => $cotizaciones]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function exportarMaterialesTxt(): void {
+        if (empty($_GET['id'])) {
+            http_response_code(400); echo "Error: Falta ID."; return;
+        }
+        try {
+            $texto = $this->calculosService->obtenerListaMaterialesExportar((int)$_GET['id']);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo $texto;
+        } catch (Exception $e) {
+            http_response_code(500); echo "Error: " . $e->getMessage();
+        }
+    }
+
+    public function autorizarCotizacion(): void {
         $input = json_decode(file_get_contents('php://input'), true);
         if (empty($input['id'])) {
-             http_response_code(400); 
-             echo json_encode(['error' => 'Falta ID de la cotización']); 
-             return;
+             http_response_code(400); echo json_encode(['error' => 'Falta ID']); return;
         }
-
         try {
-            // Cambiamos el estatus a AGENDADA. 
-            $this->calculosService->actualizarEstadoCotizacion((int)$input['id'], 'AGENDADA');
-            
-            echo json_encode([
-                'status' => 'success', 
-                'message' => 'Cotización marcada como AGENDADA exitosamente.'
-            ]);
-
+            $this->calculosService->actualizarEstadoCotizacion((int)$input['id'], 'ENVIADA');
+            $datos = $this->calculosService->obtenerDatosEnvio((int)$input['id']);
+            if ($datos) {
+                $resend = new ResendService();
+                $resend->enviarCotizacion($datos['uuid'], $datos['cliente_email'], $datos['cliente_nombre']);
+            }
+            echo json_encode(['status' => 'success', 'message' => 'Cotización autorizada y enviada al cliente.']);
         } catch (Exception $e) {
-            http_response_code(500); 
-            echo json_encode(['error' => 'Error al agendar: ' . $e->getMessage()]);
+            http_response_code(500); echo json_encode(['error' => 'Error interno: ' . $e->getMessage()]);
+        }
+    }
+
+    // Método alias simple (por compatibilidad de rutas)
+    public function authorize(int $id): void {
+        try {
+            $this->calculosService->actualizarEstadoCotizacion($id, 'autorizada'); // 'autorizada' vs 'ENVIADA' depende de tu lógica de negocio
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Cotización autorizada']);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Error interno: ' . $e->getMessage()]);
         }
     }
 
@@ -253,25 +305,70 @@ class CotizacionController {
             $this->calculosService->actualizarEstadoCotizacion((int)$input['id'], 'RECHAZADA');
             echo json_encode(['status' => 'success', 'message' => 'Cotización marcada como rechazada.']);
         } catch (Exception $e) {
-            http_response_code(500); 
-            echo json_encode(['error' => $e->getMessage()]);
+            http_response_code(500); echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
-    public function finalizarProyecto(): void {
+    public function agendarCotizacion(): void {
         $input = json_decode(file_get_contents('php://input'), true);
         if (empty($input['id'])) {
-            http_response_code(400); echo json_encode(['error' => 'Falta ID']); return;
+             http_response_code(400); 
+             echo json_encode(['error' => 'Falta ID de la cotización']); 
+             return;
         }
-        try {
-            $gastoMaterial = isset($input['gasto_material']) ? floatval($input['gasto_material']) : 0;
-            $gastoMo = isset($input['gasto_mo']) ? floatval($input['gasto_mo']) : 0;
 
-            $this->calculosService->finalizarProyecto((int)$input['id'], $gastoMaterial, $gastoMo);
-            echo json_encode(['status' => 'success', 'message' => 'Proyecto cerrado y utilidad calculada.']);
+        try {
+            $this->calculosService->actualizarEstadoCotizacion((int)$input['id'], 'AGENDADA');
+            echo json_encode([
+                'status' => 'success', 
+                'message' => 'Cotización marcada como AGENDADA exitosamente.'
+            ]);
         } catch (Exception $e) {
             http_response_code(500); 
-            echo json_encode(['error' => $e->getMessage()]);
+            echo json_encode(['error' => 'Error al agendar: ' . $e->getMessage()]);
+        }
+    }
+
+    // ==========================================
+    // 4. CLONADO Y EDICIÓN (Power Clone)
+    // ==========================================
+
+    public function powerCloneCotizacion(): void {
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (empty($input['id_original']) || empty($input['items']) || empty($input['mano_de_obra'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Faltan datos para el Power Clone']);
+            return;
+        }
+
+        try {
+            $res = $this->calculosService->powerCloneCotizacion(
+                (int)$input['id_original'],
+                $input['items'],
+                $input['mano_de_obra'],
+                $input['cliente_email'],
+                $input['cliente_nombre']
+            );
+
+            if (!empty($res['uuid'])) {
+                try {
+                    $pdfController = new PdfController();
+                    $pdfUrl = $pdfController->generarYGuardarPdf($res['uuid']);
+                    if ($pdfUrl) {
+                        $this->calculosService->actualizarUrlPdf($res['uuid'], $pdfUrl);
+                    }
+                } catch (Exception $e) {
+                    error_log("Error generando PDF para clon: " . $e->getMessage());
+                }
+
+                $resendService = new ResendService();
+                $resendService->enviarCotizacion($res['uuid'], $input['cliente_email'], $input['cliente_nombre']);
+            }
+
+            echo json_encode(['status' => 'success', 'data' => $res]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Error en Power Clone: ' . $e->getMessage()]);
         }
     }
 
@@ -285,41 +382,6 @@ class CotizacionController {
             echo json_encode(['status' => 'success', 'data' => $res]);
         } catch (Exception $e) {
             http_response_code(500); echo json_encode(['error' => $e->getMessage()]);
-        }
-    }
-
-    public function powerCloneCotizacion(): void {
-        $input = json_decode(file_get_contents('php://input'), true);
-        if (empty($input['id'])) {
-             http_response_code(400); echo json_encode(['error' => 'Falta ID']); return;
-        }
-        try {
-            // Asumiendo que existe este método en CalculosService, basado en rutas
-            $res = $this->calculosService->clonarCotizacion((int)$input['id']); 
-            // Nota: Si tienes un método específico powerClone en el service, úsalo aquí.
-            // Por ahora reutilizo clonarCotizacion para mantener la sintaxis válida.
-            echo json_encode(['status' => 'success', 'data' => $res]);
-        } catch (Exception $e) {
-            http_response_code(500); echo json_encode(['error' => $e->getMessage()]);
-        }
-    }
-
-    public function reenviarCorreo(): void {
-        $input = json_decode(file_get_contents('php://input'), true);
-        if (empty($input['id'])) {
-             http_response_code(400); echo json_encode(['error' => 'Falta ID']); return;
-        }
-        try {
-            $datos = $this->calculosService->obtenerDatosEnvio((int)$input['id']);
-            if ($datos) {
-                $resend = new ResendService();
-                $resend->enviarCotizacion($datos['uuid'], $datos['cliente_email'], $datos['cliente_nombre'], (int)$input['id']);
-                echo json_encode(['status' => 'success', 'message' => 'Correo reenviado exitosamente a ' . $datos['cliente_email']]);
-            } else {
-                http_response_code(404); echo json_encode(['error' => 'Cotización no encontrada.']);
-            }
-        } catch (Exception $e) {
-            http_response_code(500); echo json_encode(['error' => 'Error al enviar: ' . $e->getMessage()]);
         }
     }
 
@@ -353,24 +415,44 @@ class CotizacionController {
             http_response_code(500); echo json_encode(['error' => $e->getMessage()]);
         }
     }
-    
-    public function exportarMaterialesTxt(): void {
-         // Implementación placeholder si faltaba en tu archivo original, 
-         // pero requerida por routes.php
-         http_response_code(501);
-         echo json_encode(['error' => 'Not implemented yet']);
+
+    // ==========================================
+    // 5. FINALIZACIÓN Y UTILIDADES
+    // ==========================================
+
+    public function finalizarProyecto(): void {
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (empty($input['id']) || !isset($input['gasto_material']) || !isset($input['gasto_mo'])) {
+             http_response_code(400); 
+             echo json_encode(['error' => 'Faltan datos: id, gasto_material o gasto_mo']); 
+             return;
+        }
+        try {
+            $this->calculosService->finalizarProyecto((int)$input['id'], floatval($input['gasto_material']), floatval($input['gasto_mo']));
+            echo json_encode(['status' => 'success', 'message' => 'Proyecto cerrado y utilidad calculada.']);
+        } catch (Exception $e) {
+            http_response_code(500); 
+            echo json_encode(['error' => $e->getMessage()]);
+        }
     }
 
-    public function aplicarDescuento(): void {
-         // Implementación placeholder
-         http_response_code(501);
-         echo json_encode(['error' => 'Not implemented yet']);
-    }
-    
-    public function autorizarCotizacion(): void {
-         // Implementación placeholder
-         http_response_code(501);
-         echo json_encode(['error' => 'Not implemented yet']);
+    public function reenviarCorreo(): void {
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (empty($input['id'])) {
+             http_response_code(400); echo json_encode(['error' => 'Falta ID']); return;
+        }
+        try {
+            $datos = $this->calculosService->obtenerDatosEnvio((int)$input['id']);
+            if ($datos) {
+                $resend = new ResendService();
+                $resend->enviarCotizacion($datos['uuid'], $datos['cliente_email'], $datos['cliente_nombre'], (int)$input['id']);
+                echo json_encode(['status' => 'success', 'message' => 'Correo reenviado exitosamente a ' . $datos['cliente_email']]);
+            } else {
+                http_response_code(404); echo json_encode(['error' => 'Cotización no encontrada.']);
+            }
+        } catch (Exception $e) {
+            http_response_code(500); echo json_encode(['error' => 'Error al enviar: ' . $e->getMessage()]);
+        }
     }
 
     public function obtenerConteosPorTecnico(): void {
@@ -389,17 +471,10 @@ class CotizacionController {
         }
     }
 
-    public function listarCotizacionesAdmin(): void {
-        try {
-            // Llamamos al servicio que ya tiene la consulta SQL lista
-            $cotizaciones = $this->calculosService->obtenerListadoCotizaciones();
-            
-            header('Content-Type: application/json');
-            echo json_encode(['status' => 'success', 'data' => $cotizaciones]);
-        } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(['error' => $e->getMessage()]);
-        }
+    public function aplicarDescuento(): void {
+         // Implementación placeholder para rutas existentes
+         http_response_code(501);
+         echo json_encode(['error' => 'Not implemented yet']);
     }
 }
 ?>
