@@ -72,7 +72,7 @@ const FirmaPage = () => {
             const { error: updateError } = await supabase
                 .from('profiles')
                 .update({ firma_url: publicUrl })
-                .eq('user_id', user.id); // Asegúrate que tu columna en BD sea 'user_id' o 'id'
+                .eq('id', user.id); // Asegúrate que tu columna en BD sea 'user_id' o 'id'
 
             if (updateError) throw updateError;
 
