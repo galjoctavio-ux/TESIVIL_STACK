@@ -99,24 +99,47 @@ const SideMenu = ({ isOpen, onClose, user, logout, onOpenAvailability }) => {
 
   const navigate = useNavigate();
   const handleSubscribe = async () => {
-    if (!('serviceWorker' in navigator)) return;
+    // 1. Verificación básica de soporte
+    if (!('serviceWorker' in navigator)) {
+      alert('Tu navegador no soporta Service Workers.');
+      return;
+    }
 
-    // Tu llave PÚBLICA (La que empieza con BPEC0...)
+    if (!('PushManager' in window)) {
+      alert('Tu navegador no soporta Notificaciones Push.');
+      return;
+    }
+
+    // Tu llave PÚBLICA (Debe coincidir con la del .env del backend)
     const publicVapidKey = 'BPEC0_c6aUq8Bx67_55xzk9l9q1HCzwE4hwuKshnlTOrdRqUZbjkCFNBg7NWDo--bvKynoC8qkmjVHe30uj_UE4';
 
     try {
+      // 2. Esperar a que el SW esté activo
       const register = await navigator.serviceWorker.ready;
+
+      if (!register) {
+        throw new Error('Service Worker no está listo.');
+      }
+
+      // 3. Verificar estado actual de permisos
+      if (Notification.permission === 'denied') {
+        throw new Error('Permiso denegado. Debes habilitar las notificaciones en la configuración de Android/iOS para esta App.');
+      }
+
+      // 4. Intentar suscribirse
       const subscription = await register.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
       });
 
-      // Enviar al backend
+      // 5. Enviar al backend
       await apiService.post('/agenda/subscribe', { subscription });
-      alert('¡Notificaciones activadas!');
+      alert('¡Notificaciones activadas con éxito! 🔔');
+
     } catch (error) {
       console.error(error);
-      alert('Error al activar notificaciones. Asegúrate de dar permiso.');
+      // ESTO ES LO IMPORTANTE: Mostrar el error real en el celular
+      alert(`Error Técnico: ${error.message || error.name}`);
     }
   };
 
