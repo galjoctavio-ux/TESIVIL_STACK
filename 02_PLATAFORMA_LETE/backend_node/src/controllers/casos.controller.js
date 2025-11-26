@@ -85,19 +85,17 @@ export const getCasos = async (req, res) => {
   const { id: userId, rol } = req.user;
 
   try {
-    // Ahora hacemos JOIN con la tabla 'clientes' en lugar de usar columnas de texto
-    // CÁMBIALO POR ESTO (Usando created_at):
     let query = supabaseAdmin
       .from('casos')
       .select(`
-    id, 
-    status, 
-    created_at,  /* <--- CORRECCIÓN */
-    tipo_servicio,
-    cliente:clientes ( nombre_completo, telefono, direccion_principal, calificacion ),
-    tecnico:profiles ( nombre )
-  `)
-      .order('created_at', { ascending: false }); /* <--- CORRECCIÓN */
+        id, 
+        status, 
+        created_at,
+        tipo_servicio,
+        cliente:clientes ( nombre_completo, telefono, direccion_principal, calificacion ),
+        tecnico:profiles ( nombre )
+      `)
+      .order('created_at', { ascending: false });
 
     if (rol === 'tecnico') {
       query = query.eq('tecnico_id', userId);
@@ -111,7 +109,6 @@ export const getCasos = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-
 // PATCH /casos/:id/cerrar (El cierre Maestro con Lógica Financiera)
 export const cerrarCaso = async (req, res) => {
   const { id: casoId } = req.params;
@@ -235,33 +232,30 @@ export const getCasoById = async (req, res) => {
   const { id: userId, rol } = req.user;
 
   try {
-    // MODIFICADO: Ahora traemos la relación con la tabla 'clientes'
     const { data: caso, error } = await supabaseAdmin
       .from('casos')
       .select(`
-  id,
-  cliente_nombre, -- (Ojo: estos campos viejos ya no existen si usas la relación, revisa abajo)
-  status,
-  created_at, /* <--- CORRECCIÓN */
-  tipo_servicio,
-  cliente:clientes (
-    id,
-    nombre_completo,
-    telefono,
-    direccion_principal,
-    google_maps_link,
-    calificacion,
-    notas_internas
-  ),
-  tecnico:profiles ( nombre )
-`)
+        id,
+        status,
+        created_at,
+        tipo_servicio,
+        cliente:clientes (
+          id,
+          nombre_completo,
+          telefono,
+          direccion_principal,
+          google_maps_link,
+          calificacion,
+          notas_internas
+        ),
+        tecnico:profiles ( nombre )
+      `)
       .eq('id', casoId)
       .single();
 
     if (error) throw error;
     if (!caso) return res.status(404).json({ message: 'Caso no encontrado.' });
 
-    // Autorización: Admin ve todo, Técnico solo lo suyo
     if (rol === 'admin' || (rol === 'tecnico' && caso.tecnico_id === userId)) {
       return res.json(caso);
     }

@@ -1,15 +1,13 @@
 import express from 'express';
-import { supabaseAdmin } from '../services/supabaseClient.js';
 import eaPool from '../services/eaDatabase.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { randomUUID } from 'crypto';
+import { randomBytes } from 'crypto';
 
 const router = express.Router();
 
-// GET /citas/disponibilidad (Sin cambios, ya funciona)
+// GET /citas/disponibilidad (Se mantiene igual, funciona bien)
 router.get('/disponibilidad', requireAuth, async (req, res) => {
-  // ... (tu código de getDisponibilidad) ...
-  const { tecnico_id, fecha } = req.query; 
+  const { tecnico_id, fecha } = req.query;
 
   if (!tecnico_id || !fecha) {
     return res.status(400).json({ message: 'El ID del técnico y la fecha son requeridos.' });
@@ -36,110 +34,80 @@ router.get('/disponibilidad', requireAuth, async (req, res) => {
   }
 });
 
-
-// --- RUTA POST /citas (MEJORA 1 APLICADA) ---
+// --- RUTA POST /citas (ADAPTADA AL NUEVO FLUJO) ---
 router.post('/', requireAuth, async (req, res) => {
   const {
-    // Datos del Caso (de Supabase)
-    cliente_nombre,
-    tipo_caso, 
-    tecnico_id_supabase, // ID de Supabase para asignar el caso
-    // Datos de la Cita (de E!A)
-    tecnico_id_ea,      // ID de E!A para agendar
-    fecha,            
-    hora,             
+    caso_id,            // <--- AHORA RECIBIMOS EL ID DEL CASO EXISTENTE
+    tecnico_id_ea,
+    fecha,
+    hora,
     duracion_horas,
-    // Datos de GMap y Notas
-    direccion_legible, 
-    link_gmaps,       
-    notas_adicionales 
-    // (cliente_telefono quitado)
+    direccion_legible,
+    link_gmaps,
+    notas_adicionales
   } = req.body;
 
-  if (!tecnico_id_ea || !fecha || !hora || !link_gmaps || !cliente_nombre || !tecnico_id_supabase) {
-    return res.status(400).json({ message: 'Faltan datos clave para agendar.' });
+  // 1. Validaciones
+  if (!caso_id || !tecnico_id_ea || !fecha || !hora) {
+    return res.status(400).json({ message: 'Faltan datos clave para agendar (caso_id, tecnico, fecha, hora).' });
   }
 
   try {
-    // --- TAREA 1: Crear el 'Caso' en Supabase ---
-    const { data: nuevoCaso, error: casoError } = await supabaseAdmin
-      .from('casos') 
-      .insert({
-        cliente_nombre: cliente_nombre,
-        cliente_direccion: direccion_legible, // Guardamos la dirección legible
-        tipo: tipo_caso,
-        status: 'asignado', // Nace 'agendado'
-        tecnico_id: tecnico_id_supabase // Asignado de inmediato
-        // (cliente_telefono quitado)
-      })
-      .select()
-      .single();
+    // 2. Preparar fechas para MySQL (YYYY-MM-DD HH:mm:ss)
+    const start_datetime = `${fecha} ${hora}:00`;
 
-    if (casoError) throw new Error(`Error Supabase: ${casoError.message}`);
+    // Calcular fin sumando horas (usando Date nativo para evitar líos manuales)
+    const startDateObj = new Date(start_datetime);
+    const endDateObj = new Date(startDateObj.getTime() + (duracion_horas * 60 * 60 * 1000));
 
-    const caso_id = nuevoCaso.id;
+    // Formateador simple a string MySQL
+    const pad = (n) => n.toString().padStart(2, '0');
+    const toMySQLDate = (date) =>
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:00`;
 
-    // --- TAREA 2: Preparar datos E!A ---
-    const start_datetime = `${fecha}T${hora}:00`;
-    const startObj = new Date(start_datetime);
-    const endObj = new Date(startObj.getTime() + (duracion_horas * 60 * 60 * 1000));
-    const end_datetime_utc = endObj.toISOString().slice(0, 19).replace('T', ' ');
-    const start_datetime_utc = startObj.toISOString().slice(0, 19).replace('T', ' ');
+    const start_datetime_mysql = toMySQLDate(startDateObj);
+    const end_datetime_mysql = toMySQLDate(endDateObj);
 
-    const notas_estructuradas = JSON.stringify({
-      caso_id: caso_id
-    });
-    const hash = randomUUID();
+    // 3. Preparar Datos E!A
+    const notas_estructuradas = JSON.stringify({ caso_id: caso_id });
+    const hash = randomBytes(16).toString('hex');
+    const ID_CLIENTE_COMODIN = 21; // ID Genérico en E!A
+    const ID_SERVICIO_DEFAULT = 1;
 
-    // --- TAREA 3: Insertar la 'Cita' en E!A (¡CORREGIDO!) ---
-    
-    // 1. AÑADIMOS 'id_users_customer' A LA CONSULTA Y UN '?' EXTRA
+    // Notas visibles en el calendario
+    const notasParaCalendario = `Caso #${caso_id} | ${notas_adicionales || ''}`;
+
+    // 4. Insertar en E!A
     const sql = `
       INSERT INTO ea_appointments 
-      (id_users_provider, id_services, id_users_customer, book_datetime, start_datetime, end_datetime, location, direccion_link, notes, notas_estructuradas, hash)
+      (id_users_provider, id_services, id_users_customer, book_datetime, start_datetime, end_datetime, location, direccion_link, notes, notas_estructuradas, hash, is_unavailable)
       VALUES
-      (?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?);
+      (?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, 0);
     `;
-    
-    const ID_CLIENTE_COMODIN = 21; // Esto está bien
 
-    // 2. AHORA EL ARRAY 'values' (CON 10 ELEMENTOS) COINCIDE CON LOS 10 '?'
     const values = [
-      tecnico_id_ea,       // 1. id_users_provider
-      1,                   // 2. id_services
-      ID_CLIENTE_COMODIN,  // 3. id_users_customer (¡Ahora sí!)
-      start_datetime_utc,  // 4. start_datetime
-      end_datetime_utc,    // 5. end_datetime
-      direccion_legible,   // 6. location
-      link_gmaps,          // 7. direccion_link
-      notas_adicionales,   // 8. notes
-      notas_estructuradas, // 9. notas_estructuradas
-      hash                 // 10. hash
+      tecnico_id_ea,
+      ID_SERVICIO_DEFAULT,
+      ID_CLIENTE_COMODIN,
+      start_datetime_mysql,
+      end_datetime_mysql,
+      direccion_legible,
+      link_gmaps,
+      notasParaCalendario,
+      notas_estructuradas,
+      hash
     ];
-    
-    // El resto de tu código para ejecutar el query
-    // (Asegúrate de tener el try/catch que te puse antes)
-    try {
-        await eaPool.query(sql, values);
-        console.log('TAREA 3: Cita insertada en E!A con éxito.');
-    } catch (eaError) {
-        console.error('¡FALLO EN TAREA 3 (E!A)!:', eaError.message);
-        // Rollback del caso de Supabase
-        if (nuevoCaso && nuevoCaso.id) {
-           await supabaseAdmin.from('casos').delete().eq('id', nuevoCaso.id);
-           console.log(`ROLLBACK: Caso ${nuevoCaso.id} eliminado de Supabase.`);
-        }
-        throw new Error(`Error E!A: ${eaError.message}`);
-    }
-    
 
-    res.status(201).json({ 
-      message: 'Cita y Caso creados exitosamente.', 
-      nuevoCaso: nuevoCaso 
+    await eaPool.query(sql, values);
+    console.log(`Cita agendada para Caso #${caso_id} en E!A.`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Cita agendada exitosamente.'
     });
 
   } catch (error) {
-    console.error('Error al crear cita (flujo fusionado):', error);
+    console.error('Error al agendar cita:', error);
     res.status(500).json({ message: error.message });
   }
 });
