@@ -4,8 +4,7 @@ import dayjs from 'dayjs';
 import { getAgendaPorDia } from '../apiService';
 import CierreCasoModal from './CierreCasoModal';
 
-// --- CAMBIO 1: AUMENTAMOS LA ALTURA POR HORA ---
-// Antes 80, ahora 140 para que quepan los botones sin encimarse
+// Altura aumentada para dar espacio
 const HOUR_HEIGHT = 140;
 
 const timelineContainerStyles = {
@@ -17,13 +16,12 @@ const timelineContainerStyles = {
 const hourGridStyles = {
   paddingLeft: '60px',
   paddingRight: '10px',
-  // Aseguramos que el contenedor tenga la altura total correcta
   height: `${24 * HOUR_HEIGHT}px`,
 };
 
 const hourSlotStyles = {
   height: `${HOUR_HEIGHT}px`,
-  borderBottom: '1px solid #f0f0f0', // Color más sutil
+  borderBottom: '1px solid #f0f0f0',
   boxSizing: 'border-box',
   position: 'relative',
   zIndex: 1,
@@ -32,22 +30,22 @@ const hourSlotStyles = {
 const timeLabelStyles = {
   position: 'absolute',
   left: '0px',
-  top: '0px', // Alineamos el texto de la hora al inicio de la línea
+  top: '0px',
   fontSize: '12px',
   color: '#999',
   width: '50px',
   textAlign: 'right',
   paddingRight: '10px',
-  marginTop: '-6px' // Pequeño ajuste visual para centrar con la línea
+  marginTop: '-6px'
 };
 
 const actionsGridStyles = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(4, 1fr)',
-  gap: '6px',
+  gridTemplateColumns: 'repeat(5, 1fr)', // <--- CAMBIO: 5 Columnas para que quepan todos
+  gap: '4px', // Gap reducido para que entren en móvil
   marginTop: 'auto',
   paddingTop: '8px',
-  borderTop: '1px solid rgba(0,0,0,0.05)' // Separador sutil
+  borderTop: '1px solid rgba(0,0,0,0.05)'
 };
 
 const DiaTimeline = ({ date }) => {
@@ -79,7 +77,6 @@ const DiaTimeline = ({ date }) => {
       setTimeout(() => {
         if (timelineRef.current) {
           const currentHour = dayjs().hour();
-          // Hacemos scroll un poco antes de la hora actual para dar contexto
           const scrollPos = (currentHour * HOUR_HEIGHT) - 50;
           timelineRef.current.scrollTop = scrollPos > 0 ? scrollPos : 0;
         }
@@ -135,7 +132,6 @@ const DiaTimeline = ({ date }) => {
             const end = dayjs(cita.end_datetime);
             const top = (start.hour() + start.minute() / 60) * HOUR_HEIGHT;
             const durationInMinutes = end.diff(start, 'minute');
-            // Mínimo visual de 45 mins para que no colapse el diseño si la cita es muy corta
             const visualDuration = Math.max(durationInMinutes, 45);
             const height = (visualDuration / 60) * HOUR_HEIGHT;
 
@@ -145,10 +141,8 @@ const DiaTimeline = ({ date }) => {
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              zIndex: 10, // Elevamos las tarjetas sobre la grilla base
-              // Añadimos un pequeño margen derecho para que no pegue al borde
-              width: 'calc(100% - 70px)', // Ajuste según padding del contenedor
-              // Corrección visual: si las tarjetas se solapan, usa box-shadow para separarlas
+              zIndex: 10,
+              width: 'calc(100% - 70px)',
               boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
             };
 
@@ -164,7 +158,6 @@ const DiaTimeline = ({ date }) => {
                 {cita.caso ? (
                   <>
                     <div className="cita-content" style={{ overflow: 'hidden' }}>
-                      {/* Texto compacto */}
                       <strong style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.95rem' }}>
                         {cita.caso.cliente?.nombre_completo || cita.caso.cliente_nombre || 'Cliente'}
                       </strong>
@@ -174,6 +167,7 @@ const DiaTimeline = ({ date }) => {
                     </div>
 
                     <div className="cita-actions" style={actionsGridStyles}>
+                      {/* 1. MAPA */}
                       <button
                         className="cita-icon-button"
                         onClick={() => handleOpenMaps(cita.caso)}
@@ -183,6 +177,7 @@ const DiaTimeline = ({ date }) => {
                         📍
                       </button>
 
+                      {/* 2. DETALLES */}
                       <Link
                         to={`/detalle-caso/${cita.caso.id}`}
                         className="cita-icon-button"
@@ -192,6 +187,7 @@ const DiaTimeline = ({ date }) => {
                         ℹ️
                       </Link>
 
+                      {/* 3. REVISIÓN */}
                       {(cita.caso.tipo !== 'levantamiento' && isCasoActivo) ? (
                         <Link
                           to={`/revision/${cita.caso.id}`}
@@ -201,11 +197,27 @@ const DiaTimeline = ({ date }) => {
                         >
                           📝
                         </Link>
-                      ) : (
-                        isCasoActivo && <div />
-                      )}
+                      ) : (<div />)}
 
-                      {isCasoActivo && (
+                      {/* 4. COTIZAR (EL RAYITO REGRESA) */}
+                      {(isCasoActivo || cita.caso.tipo === 'alto_consumo') ? (
+                        <Link
+                          to="/cotizador"
+                          state={{
+                            casoId: cita.caso.id,
+                            clienteNombre: cita.caso.cliente?.nombre_completo || cita.caso.cliente_nombre,
+                            clienteDireccion: cita.caso.cliente?.direccion_principal || cita.caso.cliente_direccion
+                          }}
+                          className="cita-icon-button"
+                          title="Crear Cotización"
+                          style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                        >
+                          ⚡
+                        </Link>
+                      ) : (<div />)}
+
+                      {/* 5. COBRAR */}
+                      {isCasoActivo ? (
                         <button
                           className="cita-icon-button"
                           style={{ backgroundColor: '#e8f5e9', borderColor: '#4caf50', width: '100%' }}
@@ -214,7 +226,7 @@ const DiaTimeline = ({ date }) => {
                         >
                           💰
                         </button>
-                      )}
+                      ) : (<div />)}
                     </div>
                   </>
                 ) : (
@@ -227,7 +239,6 @@ const DiaTimeline = ({ date }) => {
             );
           })}
 
-          {/* Espaciador final para poder hacer scroll hasta la última hora cómodamente */}
           <div style={{ height: '100px' }}></div>
         </div>
       )}

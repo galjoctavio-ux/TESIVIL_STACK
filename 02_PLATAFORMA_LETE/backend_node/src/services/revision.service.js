@@ -149,7 +149,11 @@ export const processRevision = async (payload, tecnicoAuth) => {
       .from('casos')
       .update({ status: 'completado' })
       .eq('id', datosDeTrabajo.caso_id)
-      .select('cliente_nombre, cliente_direccion')
+      // --- CAMBIO CLAVE AQUÍ ---
+      // Antes: .select('cliente_nombre, cliente_direccion')
+      // Ahora: Usamos la relación con la tabla clientes
+      .select('id, cliente:clientes(nombre_completo, direccion_principal)')
+      // -------------------------
       .single();
 
     if (casoError) console.warn(`Advertencia: No se pudo actualizar el caso ${datosDeTrabajo.caso_id}`, casoError);
@@ -188,10 +192,12 @@ export const processRevision = async (payload, tecnicoAuth) => {
       header: {
         id: newRevisionId,
         fecha_revision: revisionResult.created_at || new Date().toISOString(),
-        cliente_nombre: casoData?.cliente_nombre || 'Cliente',
-        cliente_direccion: casoData?.cliente_direccion || '',
+        // --- CAMBIO CLAVE AQUÍ TAMBIÉN ---
+        // Accedemos a través del objeto anidado 'cliente'
+        cliente_nombre: casoData?.cliente?.nombre_completo || 'Cliente',
+        cliente_direccion: casoData?.cliente?.direccion_principal || '',
+        // --------------------------------
         cliente_email: revisionResult.cliente_email || '',
-        // DATOS DEL INGENIERO (Obtenidos del paso 0)
         tecnico_nombre: nombreIngeniero,
         firma_ingeniero_url: firmaIngenieroUrl
       },
