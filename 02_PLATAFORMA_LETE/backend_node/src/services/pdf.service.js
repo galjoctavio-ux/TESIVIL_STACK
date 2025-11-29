@@ -4,12 +4,13 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// ICONOS SVG (Para evitar las 'X' o cuadros vacíos) - SOLUCIÓN PUNTO 4
+// ICONOS SVG (Solución Punto 5 y 6: Eliminamos emojis que causan cuadros rotos)
 const ICONS = {
   check: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
   alert: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
   warning: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
-  fire: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-2.246-4.004-3.5-5.5A2.5 2.5 0 0 1 5 6c0 1.5 1 2.5 3 3.5a2.5 2.5 0 0 0 0 5z"></path><path d="M12 22c5.523 0 10-4.477 10-10a10 10 0 0 0-10-10C6.477 2 2 6.477 2 12c0 5.523 4.477 10 10 10z"></path></svg>`
+  fire: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-2.246-4.004-3.5-5.5A2.5 2.5 0 0 1 5 6c0 1.5 1 2.5 3 3.5a2.5 2.5 0 0 0 0 5z"></path><path d="M12 22c5.523 0 10-4.477 10-10a10 10 0 0 0-10-10C6.477 2 2 6.477 2 12c0 5.523 4.477 10 10 10z"></path></svg>`,
+  ghost: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 22l3-3 3 3V11a6 6 0 0 0-12 0v11l3-3 3 3z"/><path d="M9 11h.01"/><path d="M15 11h.01"/></svg>`
 };
 
 // ---------------------------------------------------------
@@ -20,16 +21,16 @@ const styles = `
   
   body { font-family: 'Roboto', sans-serif; padding: 40px; color: #1f2937; margin: 0; background: #fff; font-size: 12px; line-height: 1.4; }
   
-  /* HEADER */
-  .header { display: flex; justify-content: space-between; border-bottom: 3px solid #000; padding-bottom: 15px; margin-bottom: 25px; }
-  .brand h1 { font-size: 26px; font-weight: 900; margin: 0; color: #111; text-transform: uppercase; letter-spacing: -1px; }
-  .brand p { font-size: 9px; color: #666; margin: 2px 0 0 0; text-transform: uppercase; letter-spacing: 2px; }
+  /* HEADER CON LOGO (Punto 1) */
+  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #000; padding-bottom: 15px; margin-bottom: 25px; }
+  .logo-img { height: 60px; object-fit: contain; } /* Ajusta altura del logo */
+  
   .client-info { text-align: right; }
   .client-name { font-size: 16px; font-weight: 700; color: #000; }
   .client-meta { font-size: 10px; color: #555; margin-top: 2px; }
   .tarifa-badge { background: #111; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 10px; margin-left: 5px; }
   
-  /* ZONA B: RESUMEN FINANCIERO (GANCHO) */
+  /* FINANCIAL GRID */
   .financial-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
   .fin-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; text-align: center; }
   .fin-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #6b7280; margin-bottom: 5px; }
@@ -38,15 +39,17 @@ const styles = `
   
   .card-danger { background: #fef2f2; border-color: #fecaca; }
   .card-danger .fin-value { color: #dc2626; }
+  .card-warning { background: #fffbeb; border-color: #fcd34d; } /* Punto 2: Color naranja para ineficiencia */
+  .card-warning .fin-value { color: #d97706; }
   .card-success { background: #f0fdf4; border-color: #bbf7d0; }
   .card-success .fin-value { color: #16a34a; }
 
-  /* ZONA C: IA */
+  /* IA BOX */
   .ai-box { background: #eff6ff; border-left: 4px solid #2563eb; padding: 15px; margin-bottom: 25px; border-radius: 0 8px 8px 0; }
-  .ai-title { font-size: 10px; font-weight: 900; color: #1e40af; text-transform: uppercase; margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+  .ai-title { font-size: 10px; font-weight: 900; color: #1e40af; text-transform: uppercase; margin-bottom: 5px; }
   .ai-text { font-style: italic; color: #1e3a8a; font-size: 11px; text-align: justify; }
 
-  /* ZONA D: VISUALIZACIÓN */
+  /* VIZ GRID */
   .viz-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 30px; margin-bottom: 25px; align-items: start; }
   .chart-container { text-align: center; }
   .infra-card { padding: 15px; border-radius: 8px; text-align: center; border: 1px solid transparent; }
@@ -56,39 +59,49 @@ const styles = `
   
   .tech-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
   .tech-table td { padding: 4px 0; border-bottom: 1px solid #f3f4f6; }
-  .tech-val { font-weight: 700; text-align: right; }
+  .tech-val { font-weight: 700; text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 5px; } /* Flex para alinear icono y texto */
 
-  /* ZONA E: TABLA EQUIPOS */
+  /* TABLA EQUIPOS */
   .section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; color: #374151; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 10px; margin-top: 20px; }
-  
   .main-table { width: 100%; border-collapse: collapse; font-size: 10px; }
   .main-table th { text-align: left; padding: 8px; background: #f3f4f6; color: #4b5563; font-weight: 700; text-transform: uppercase; }
   .main-table td { padding: 8px; border-bottom: 1px solid #e5e7eb; }
-
-  /* COLORES DE FILAS - SOLUCIÓN PUNTO 2 */
-  .row-malo { background-color: #fee2e2; color: #991b1b; } /* Rojo suave */
-  .row-regular { background-color: #ffedd5; color: #9a3412; } /* Naranja suave */
-  
+  .row-malo { background-color: #fee2e2; color: #991b1b; }
+  .row-regular { background-color: #ffedd5; color: #9a3412; }
   .badge { padding: 2px 6px; border-radius: 10px; font-size: 8px; font-weight: 800; text-transform: uppercase; }
   .b-malo { background: #fee2e2; color: #991b1b; }
   .b-regular { background: #fef3c7; color: #92400e; }
   .b-bueno { background: #d1fae5; color: #065f46; }
 
-  /* ZONA F: TRIGGERS (VENTA) */
-  .trigger-box { display: flex; align-items: center; gap: 15px; padding: 15px; border-radius: 8px; margin-top: 20px; color: white; }
+  /* TRIGGERS & BOTONES (Punto 6) */
+  .trigger-box { display: flex; align-items: center; gap: 15px; padding: 15px; border-radius: 8px; margin-top: 20px; color: white; position: relative; }
   .t-solar { background: linear-gradient(135deg, #b91c1c, #7f1d1d); }
   .t-leak { background: #111; }
-  .trigger-icon { font-size: 24px; }
   .trigger-content h3 { margin: 0; font-size: 12px; font-weight: 900; text-transform: uppercase; }
   .trigger-content p { margin: 2px 0 0 0; font-size: 10px; opacity: 0.9; }
+  
+  /* Botón Cuentatrón */
+  .cta-btn {
+    background-color: #2563eb; 
+    color: white; 
+    text-decoration: none; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    font-weight: bold; 
+    font-size: 10px; 
+    margin-top: 10px; 
+    display: inline-block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .cta-btn:hover { background-color: #1d4ed8; }
 
-  /* TABLA DESGLOSE - SOLUCIÓN PUNTO 6 */
+  /* TABLA DESGLOSE */
   .breakdown-table { width: 100%; border: 1px solid #e5e7eb; border-radius: 6px; margin-top: 20px; font-size: 10px; }
   .breakdown-table td { padding: 8px; border-bottom: 1px solid #eee; }
   .breakdown-header { background: #f3f4f6; font-weight: bold; text-transform: uppercase; }
   .breakdown-total { background: #111; color: #fff; font-weight: 900; font-size: 12px; }
 
-  /* FOOTER & FIRMAS - SOLUCIÓN PUNTO 5 */
   .footer { margin-top: 40px; display: flex; justify-content: space-between; page-break-inside: avoid; }
   .sig-box { width: 40%; text-align: center; border-top: 1px solid #d1d5db; padding-top: 10px; position: relative; }
   .sig-img { height: 60px; object-fit: contain; display: block; margin: 0 auto 5px auto; } 
@@ -96,32 +109,31 @@ const styles = `
 
 
 // ---------------------------------------------------------
-// 2. IA GENERATIVA (GEMINI PROMPT REFORZADO)
+// 2. IA GENERATIVA (Punto 3: Distinción Fuga vs Ineficiencia)
 // ---------------------------------------------------------
 const generarDiagnosticoIA = async (datos) => {
   const apiKey = process.env.GEMINI_API_KEY;
 
-  // Preparamos solo los datos que le importan al "Auditor Financiero"
+  // Pasamos los datos desglosados para que la IA entienda qué es qué
   const payloadIA = {
     tarifa: datos.header?.tarifa,
-    condicion_infraestructura: datos.header?.condicion_infra,
     kwh_recibo: datos.finanzas?.kwh_recibo,
-    kwh_desperdicio: datos.finanzas?.kwh_desperdicio,
-    alerta_fuga: datos.finanzas?.alerta_fuga,
+    kwh_ineficiencia: datos.finanzas?.kwh_ineficiencia, // Desperdicio por equipos
+    kwh_fuga_real: datos.finanzas?.kwh_fuga_real,       // Fuga infraestructura
     equipos_criticos: datos.equipos?.filter(e => e.estado_equipo === 'Malo').map(e => e.nombre_equipo)
   };
 
   const prompt = `
-    Actúa como un Auditor Energético Senior experto en finanzas.
+    Actúa como un Auditor Energético Senior.
     Analiza este JSON: ${JSON.stringify(payloadIA)}.
     
-    Escribe un "Diagnóstico Ejecutivo" de máximo 60 palabras.
+    Escribe un "Diagnóstico Ejecutivo" (Max 60 palabras).
     
-    REGLAS OBLIGATORIAS:
-    1. Si 'condicion_infraestructura' es 'Malo', DEBES iniciar con: "URGENTE: Riesgo crítico de seguridad e incendio por instalación obsoleta."
-    2. Si 'alerta_fuga' es true, menciona explícitamente que hay "Dinero perdido en fugas o consumo fantasma".
-    3. Si la tarifa es 'DAC', menciona que están pagando sobreprecio y la solución es solar.
-    4. Tono: Profesional, directo y alarmante si hay riesgo. Sin saludos.
+    INSTRUCCIONES CLAVE:
+    1. Distingue claramente entre "Ineficiencia" (dinero perdido por equipos viejos) y "Fuga Eléctrica" (dinero perdido por cableado o robo).
+    2. Si 'kwh_fuga_real' es alto, ALERTA sobre riesgo de instalación.
+    3. Si 'kwh_ineficiencia' es alto, recomienda cambio de equipos.
+    4. Tono: Profesional y directo.
   `;
 
   if (!apiKey) return "Análisis IA no disponible. Se recomienda atender los puntos rojos marcados en este reporte.";
@@ -143,16 +155,24 @@ const generarDiagnosticoIA = async (datos) => {
 // 3. GENERADOR HTML
 // ---------------------------------------------------------
 const getHtmlReporte = (datos, textoIA) => {
+  // Aseguramos desestructurar 'desglose_desperdicio' para la tabla final
   const { header, finanzas, equipos, mediciones, desglose_desperdicio } = datos;
 
-  // A. Lógica Gráfica QuickChart (Dona)
+  // A. Lógica Gráfica QuickChart (Punto 4: 3 Segmentos)
+  // Verde: Útil/Eficiente
+  // Naranja: Ineficiencia (Equipos)
+  // Rojo: Fuga Real (Infraestructura)
   const chartData = {
     type: 'doughnut',
     data: {
-      labels: ['Consumo Real', 'Desperdicio/Fuga'],
+      labels: ['Consumo Eficiente', 'Ineficiencia (Equipos)', 'Fuga / Fantasma'],
       datasets: [{
-        data: [finanzas.kwh_ajustado, finanzas.kwh_desperdicio],
-        backgroundColor: ['#22c55e', '#ef4444'], // Verde vs Rojo
+        data: [
+          finanzas.kwh_eficiente || 0,
+          finanzas.kwh_ineficiencia || 0,
+          finanzas.kwh_fuga_real || 0
+        ],
+        backgroundColor: ['#22c55e', '#f59e0b', '#dc2626'], // Verde, Naranja, Rojo
         borderWidth: 0
       }]
     },
@@ -163,7 +183,7 @@ const getHtmlReporte = (datos, textoIA) => {
   };
   const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartData))}&w=250&h=250`;
 
-  // LOGICA INFRAESTRUCTURA (Reemplazando Emojis por SVGs)
+  // LOGICA INFRAESTRUCTURA
   let infraHtml = '';
   if (header.condicion_infra === 'Malo') {
     infraHtml = `
@@ -188,7 +208,7 @@ const getHtmlReporte = (datos, textoIA) => {
       </div>`;
   }
 
-  // LOGICA TABLA EQUIPOS (Colores de filas)
+  // LOGICA TABLA EQUIPOS (Corrigiendo el error de badgeClass)
   const rows = equipos.map(eq => {
     let badgeClass = 'b-bueno';
     let rowClass = '';
@@ -203,12 +223,12 @@ const getHtmlReporte = (datos, textoIA) => {
     }
 
     return `
-      <tr class="${rowClass}">  <td>
+      <tr class="${rowClass}">
+        <td>
           <div style="font-weight:bold;">${eq.nombre_equipo}</div>
           <div style="font-size:9px; color:#666;">${eq.nombre_personalizado || ''}</div>
         </td>
-        <td style="text-align:center;">
-            <span class="badge ${badgeClass}">${eq.estado_equipo}</span> </td>
+        <td style="text-align:center;"><span class="badge ${badgeClass}">${eq.estado_equipo}</span></td>
         <td style="text-align:center;">${eq.tiempo_uso} h</td>
         <td style="text-align:right;">${eq.amperaje_medido} A</td>
         <td style="text-align:right; font-weight:bold;">${eq.kwh_bimestre_calculado?.toFixed(0)} kWh</td>
@@ -216,7 +236,7 @@ const getHtmlReporte = (datos, textoIA) => {
     `;
   }).join('');
 
-  // SOLUCIÓN PUNTO 3: Mapeo de anomalías (evitar [object Object])
+  // Mapeo de anomalías
   const anomaliasHtml = (datos.causas_alto_consumo || [])
     .map(c => typeof c === 'string' ? `<li>${c}</li>` : '')
     .join('');
@@ -229,12 +249,7 @@ const getHtmlReporte = (datos, textoIA) => {
 
       <div class="header">
         <div class="brand">
-          <h1 style="margin-bottom:5px;">LUZ EN TU ESPACIO</h1>
-          <div style="font-size:9px; color:#4b5563; line-height:1.3;">
-            Av. Sebastian Bach 4978, Prados Guadalupe, Zapopan, Jal.<br>
-            Tel: 33 2639 5038 | contacto-lete@tesivil.com<br>
-            www.tesivil.com/lete
-          </div>
+          <img src="https://www.tesivil.com/logo_LETE.png" class="logo-img" alt="Luz en tu Espacio" />
         </div>
         <div class="client-info">
           <div class="client-name">
@@ -251,13 +266,22 @@ const getHtmlReporte = (datos, textoIA) => {
           <div class="fin-label">Reportado en Recibo</div>
           <div class="fin-value">${finanzas.kwh_recibo} <span class="fin-unit">kWh</span></div>
         </div>
-        <div class="fin-card card-success">
-          <div class="fin-label">Consumo Auditado Real</div>
-          <div class="fin-value">${finanzas.kwh_ajustado.toFixed(0)} <span class="fin-unit">kWh</span></div>
-        </div>
-        <div class="fin-card ${finanzas.alerta_fuga ? 'card-danger' : ''}">
-          <div class="fin-label">Desperdicio / Fuga</div>
-          <div class="fin-value">${finanzas.kwh_desperdicio.toFixed(0)} <span class="fin-unit">kWh</span></div>
+        
+        ${finanzas.kwh_ineficiencia > 50 ? `
+          <div class="fin-card card-warning">
+             <div class="fin-label">Ineficiencia (Equipos)</div>
+             <div class="fin-value">${finanzas.kwh_ineficiencia.toFixed(0)} <span class="fin-unit">kWh</span></div>
+          </div>
+        ` : `
+          <div class="fin-card card-success">
+             <div class="fin-label">Consumo Auditado</div>
+             <div class="fin-value">${finanzas.kwh_auditado.toFixed(0)} <span class="fin-unit">kWh</span></div>
+          </div>
+        `}
+
+        <div class="fin-card ${finanzas.kwh_fuga_real > 10 ? 'card-danger' : ''}">
+          <div class="fin-label">Fuga / Fantasma</div>
+          <div class="fin-value">${finanzas.kwh_fuga_real.toFixed(0)} <span class="fin-unit">kWh</span></div>
         </div>
       </div>
 
@@ -269,7 +293,11 @@ const getHtmlReporte = (datos, textoIA) => {
       <div class="viz-grid">
         <div class="chart-container">
           <img src="${chartUrl}" width="160" />
-          <div style="font-size:9px; color:#888; margin-top:5px;">Distribución de Energía</div>
+          <div style="font-size:9px; color:#888; margin-top:5px;">
+             <span style="color:#22c55e">●</span> Útil 
+             <span style="color:#f59e0b">●</span> Ineficiencia 
+             <span style="color:#dc2626">●</span> Fuga
+          </div>
         </div>
         <div>
           ${infraHtml}
@@ -277,7 +305,13 @@ const getHtmlReporte = (datos, textoIA) => {
             <table class="tech-table">
               <tr><td>Voltaje de Operación</td><td class="tech-val">${mediciones.voltaje_medido} V</td></tr>
               <tr><td>Corriente de Fuga (Medición Directa)</td><td class="tech-val ${mediciones.corriente_fuga_f1 > 0.5 ? 'color:red' : ''}">${mediciones.corriente_fuga_f1} A</td></tr>
-              <tr><td>Capacidad vs Calibre</td><td class="tech-val">${mediciones.capacidad_vs_calibre ? '✅ Correcto' : '❌ Incorrecto'}</td></tr>
+              
+              <tr>
+                 <td>Capacidad vs Calibre</td>
+                 <td class="tech-val">
+                    ${mediciones.capacidad_vs_calibre ? `${ICONS.check} Correcto` : `${ICONS.alert} Incorrecto`}
+                 </td>
+              </tr>
             </table>
           </div>
         </div>
@@ -304,17 +338,18 @@ const getHtmlReporte = (datos, textoIA) => {
           <div class="trigger-icon">☀️</div>
           <div class="trigger-content">
             <h3>Alerta: Tarifa DAC Detectada</h3>
-            <p>Estás pagando el precio más alto de energía en México. La única forma efectiva de salir y congelar el costo es instalar Paneles Solares.</p>
+            <p>Estás pagando el precio más alto de energía. Sal de DAC instalando Paneles Solares.</p>
           </div>
         </div>` : ''
     }
 
       ${finanzas.alerta_fuga ? `
         <div class="trigger-box t-leak">
-          <div class="trigger-icon">👻</div>
+          <div class="trigger-icon">${ICONS.ghost}</div>
           <div class="trigger-content">
-            <h3>Alerta: Consumo Fantasma Crítico</h3>
-            <p>Detectamos una diferencia mayor al 15% entre lo que usas y lo que pagas. Recomendamos instalar el monitor "Cuentatrón" 24/7 para hallar la fuga.</p>
+            <h3>Diagnóstico de Fuga / Consumo Fantasma</h3>
+            <p>Debido a las detecciones observadas, te recomendamos la instalación de un medidor Cuentatrón.</p>
+            <a href="https://www.tesivil.com/cuentatron/diagnostico" class="cta-btn">Solicitar Monitor 24/7</a>
           </div>
         </div>` : ''
     }
@@ -334,7 +369,7 @@ const getHtmlReporte = (datos, textoIA) => {
         </p>
       </div>
 
-      ${finanzas.kwh_desperdicio > 0 ? `
+      ${finanzas.kwh_desperdicio_total > 0 ? `
       <div class="section-title" style="margin-top:20px; color:#b91c1c;">Análisis de Pérdidas de Energía</div>
       <table class="breakdown-table">
         <tr class="breakdown-header">
@@ -354,8 +389,8 @@ const getHtmlReporte = (datos, textoIA) => {
           <td style="text-align:right;">${desglose_desperdicio?.consumo_no_identificado?.toFixed(1) || 0} kWh</td>
         </tr>
         <tr class="breakdown-total">
-          <td>TOTAL DESPERDICIO</td>
-          <td style="text-align:right;">${finanzas.kwh_desperdicio.toFixed(1)} kWh</td>
+          <td>TOTAL PÉRDIDAS</td>
+          <td style="text-align:right;">${finanzas.kwh_desperdicio_total.toFixed(1)} kWh</td>
         </tr>
       </table>
       ` : ''}
@@ -374,7 +409,7 @@ const getHtmlReporte = (datos, textoIA) => {
       </div>
 
       <div style="margin-top:30px; padding-top:10px; border-top:1px solid #e5e7eb; font-size:8px; color:#9ca3af; text-align:justify;">
-        <strong>AVISO LEGAL:</strong> Este documento es un diagnóstico técnico basado en las condiciones visibles y mediciones puntuales realizadas durante la visita. Los cálculos de consumo, desperdicio y ahorro son estimaciones de ingeniería con fines informativos y pueden variar según los hábitos de uso del usuario. Este reporte no constituye una garantía de facturación futura ante CFE ni responsabiliza a <em>Luz en tu Espacio</em> por vicios ocultos en la infraestructura eléctrica o cambios posteriores en la instalación.
+        <strong>AVISO LEGAL:</strong> Este documento es un diagnóstico técnico basado en las condiciones visibles y mediciones puntuales realizadas durante la visita. Los cálculos de consumo, desperdicio y ahorro son estimaciones de ingeniería con fines informativos.
       </div>
 
     </body>

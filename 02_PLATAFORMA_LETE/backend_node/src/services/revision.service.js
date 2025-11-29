@@ -366,6 +366,18 @@ export const processRevision = async (payload, tecnicoAuth) => {
   // ---------------------------------------------------------
   let pdfUrl = null;
 
+  // CÁLCULO PARA GRÁFICA DE 3 PARTES:
+  // 1. Fuga Real (Peligrosa): Infraestructura + Consumo No Identificado
+  const kwhFugaReal = kwhFugaInfraestructura + kwhNoIdentificado;
+
+  // 2. Ineficiencia (Equipos): Lo que gastan de más los equipos malos
+  const kwhIneficiencia = kwhIneficienciaEquipos;
+
+  // 3. Consumo Eficiente (Lo que sobra):
+  // Si el recibo es 1000 y desperdicio total es 300, el eficiente es 700.
+  let kwhEficiente = kwhRecibo - kwhDesperdicioTotal;
+  if (kwhEficiente < 0) kwhEficiente = 0; // Protección por si los cálculos exceden el recibo
+
   // Preparamos el objeto con TODA la info para pintar el reporte
   const datosParaPdf = {
     header: {
@@ -375,23 +387,27 @@ export const processRevision = async (payload, tecnicoAuth) => {
       cliente_direccion: casoUpdated?.cliente?.direccion_principal || 'Dirección no registrada',
       cliente_email: revData.cliente_email || casoUpdated?.cliente?.email || '',
       tecnico_nombre: nombreIngeniero,
-      firma_ingeniero_url: firmaIngenieroUrl, // La firma que recuperamos en el Bloque 0
+      firma_ingeniero_url: firmaIngenieroUrl,
       tarifa,
       condicion_infra: condicionInfra
     },
     mediciones: {
       ...datosDeTrabajo,
-      // Aseguramos que vaya la corriente de fuga calculada/decidida (Mono/Bi/Tri)
       corriente_fuga_f1: datosDeTrabajo.corriente_fuga_f1
     },
     finanzas: {
       kwh_recibo: kwhRecibo,
-      kwh_ajustado: totalAuditadoAjustado, // CORREGIDO: Coincide con lo que espera pdf.service.js
-      kwh_desperdicio: kwhDesperdicioTotal,
+      kwh_auditado: totalAuditadoAjustado,
+      kwh_desperdicio_total: kwhDesperdicioTotal, // Total general
+
+      // NUEVO: Desglose para gráfica y textos
+      kwh_eficiente: kwhEficiente,
+      kwh_ineficiencia: kwhIneficiencia, // Equipos viejos (Naranja)
+      kwh_fuga_real: kwhFugaReal,        // Cables/Fantasma (Rojo)
+
       porcentaje_desperdicio: porcentajeFuga,
       alerta_fuga: alertaFuga
     },
-    // Desglose para la tabla final de pérdidas
     desglose_desperdicio: {
       fuga_infraestructura: kwhFugaInfraestructura,
       equipos_ineficientes: kwhIneficienciaEquipos,
@@ -399,7 +415,7 @@ export const processRevision = async (payload, tecnicoAuth) => {
     },
     equipos: equiposCalculados,
     consumo_total_estimado: totalAuditadoAjustado,
-    causas_alto_consumo: causasLimpias, // Pasamos la lista limpia
+    causas_alto_consumo: causasLimpias,
     recomendaciones_tecnico: revData.recomendaciones_tecnico || '',
     firma_cliente_url: firmaClienteUrl
   };
@@ -409,20 +425,17 @@ export const processRevision = async (payload, tecnicoAuth) => {
     const pdfBuffer = await generarPDF(datosParaPdf);
 
     if (pdfBuffer) {
+      // ... (el resto del código de subida se mantiene igual)
       const pdfPath = `reportes/reporte-${newRevisionId}.pdf`;
-      // Subimos el PDF generado
       const publicPdfUrl = await uploadBufferToStorage('reportes', pdfPath, pdfBuffer, 'application/pdf');
 
       if (publicPdfUrl) {
         pdfUrl = publicPdfUrl;
-        // Guardar URL del PDF en la revisión
         await supabaseAdmin.from('revisiones').update({ pdf_url: pdfUrl }).eq('id', newRevisionId);
         console.log('PDF generado y subido correctamente:', pdfUrl);
       } else {
         console.error('No se pudo obtener URL pública del PDF subido.');
       }
-    } else {
-      console.warn('generarPDF devolvió buffer vacío o nulo.');
     }
   } catch (pdfError) {
     console.error('Error crítico en proceso de PDF:', pdfError);
