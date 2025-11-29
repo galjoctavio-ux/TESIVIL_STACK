@@ -287,6 +287,21 @@ const getHtmlReporte = (datos, textoIA) => {
         </div>` : ''
     }
 
+    <div class="section-title" style="margin-top:20px;">Observaciones del Ingeniero</div>
+      <div style="background:#f9fafb; border:1px solid #e5e7eb; padding:12px; border-radius:8px; margin-bottom:20px;">
+        ${datos.causas_alto_consumo?.length > 0 ? `
+          <div style="font-weight:700; font-size:10px; margin-bottom:4px;">Anomalías Específicas:</div>
+          <ul style="margin:0 0 10px 0; padding-left:20px; font-size:10px; color:#4b5563;">
+            ${datos.causas_alto_consumo.map(c => `<li>${c}</li>`).join('')}
+          </ul>
+        ` : ''}
+        
+        <div style="font-weight:700; font-size:10px; margin-bottom:2px;">Dictamen Técnico y Recomendaciones:</div>
+        <p style="margin:0; font-size:10px; color:#374151; white-space:pre-wrap;">
+          ${datos.recomendaciones_tecnico || 'Se sugiere proceder con las correcciones marcadas en este reporte.'}
+        </p>
+      </div>
+
       <div class="footer">
         <div class="sig-box">
           ${header.firma_ingeniero_url ? `<img src="${header.firma_ingeniero_url}" class="sig-img"/>` : '<div style="height:50px;"></div>'}
