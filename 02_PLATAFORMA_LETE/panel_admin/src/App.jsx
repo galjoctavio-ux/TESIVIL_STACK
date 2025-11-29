@@ -7,7 +7,8 @@ import GestionMateriales from './pages/GestionMateriales';
 import CotizacionesList from './pages/CotizacionesList';
 import ConfiguracionFinanciera from './pages/ConfiguracionFinanciera';
 import EditarCotizacion from './pages/EditarCotizacion'; // <--- IMPORTACIÓN CORRECTA AQUÍ ARRIBA
-import ProtectedRoute from './components/ProtectedRoute'; 
+import ProtectedRoute from './components/ProtectedRoute';
+import ConfiguracionPagos from './pages/ConfiguracionPagos';
 import './App.css';
 import './responsive.css';
 
@@ -18,51 +19,60 @@ function App() {
       <Route path="/" element={<Login />} />
 
       {/* Rutas Protegidas */}
-      <Route 
-        path="/dashboard" 
-        element={<ProtectedRoute><Dashboard /></ProtectedRoute>} 
+      <Route
+        path="/dashboard"
+        element={<ProtectedRoute><Dashboard /></ProtectedRoute>}
       />
-      <Route 
-        path="/costos" 
-        element={<ProtectedRoute><MapeoPrecios /></ProtectedRoute>} 
+      <Route
+        path="/costos"
+        element={<ProtectedRoute><MapeoPrecios /></ProtectedRoute>}
       />
-      <Route 
-        path="/materiales" 
+      <Route
+        path="/materiales"
         element={
           <ProtectedRoute>
             <GestionMateriales />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/cotizaciones" 
+      <Route
+        path="/cotizaciones"
         element={
           <ProtectedRoute>
             <CotizacionesList />
           </ProtectedRoute>
-        } 
+        }
       />
 
       {/* RUTA DE EDICIÓN MAESTRA (NUEVA) */}
-      <Route 
-        path="/cotizaciones/editar/:id" 
+      <Route
+        path="/cotizaciones/editar/:id"
         element={
           <ProtectedRoute>
             <EditarCotizacion />
           </ProtectedRoute>
-        } 
+        }
       />
 
-      <Route 
-        path="/configuracion" 
-        element={<ProtectedRoute><ConfiguracionFinanciera /></ProtectedRoute>} 
+      <Route
+        path="/configuracion"
+        element={<ProtectedRoute><ConfiguracionFinanciera /></ProtectedRoute>}
+      />
+
+      <Route
+        path="/pagos-config"
+        element={
+          <ProtectedRoute allowedRoles={['admin', 'superadmin']}>
+            <ConfiguracionPagos />
+          </ProtectedRoute>
+        }
       />
 
       {/* Ruta 404 */}
       <Route path="*" element={
-        <div style={{padding: '50px', textAlign: 'center'}}>
+        <div style={{ padding: '50px', textAlign: 'center' }}>
           <h2>404 - Página no encontrada</h2>
-          <Link to="/dashboard" style={{color: '#007bff'}}>Volver al Dashboard</Link>
+          <Link to="/dashboard" style={{ color: '#007bff' }}>Volver al Dashboard</Link>
         </div>
       } />
 

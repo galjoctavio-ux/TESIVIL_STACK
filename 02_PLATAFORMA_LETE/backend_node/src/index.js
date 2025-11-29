@@ -55,6 +55,7 @@ apiRouter.use('/finanzas', finanzasRoutes);
 // ¡IMPORTANTE! Montamos nuestro router en el prefijo
 app.use('/lete/api', apiRouter);
 app.use('/api/config', configRoutes);
+app.use('/api/finanzas', finanzasRoutes); // <--- Usar
 
 // --- Manejador de errores básico ---
 app.use((err, req, res, next) => {

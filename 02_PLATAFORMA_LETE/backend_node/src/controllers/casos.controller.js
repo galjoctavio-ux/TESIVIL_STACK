@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto'; // <--- Importamos SOLO lo que necesitamos
 import { supabaseAdmin } from '../services/supabaseClient.js';
 import eaPool from '../services/eaDatabase.js'; // --- AÑADIDO: Importar la conexión a E!A ---
+import { getFinancialConfigInternal } from './config.controller.js'; // <--- NUEVO IMPORT
 
 // --- NUEVO: Helper para obtener configuración financiera ---
 async function getFinancialConfig() {
@@ -111,13 +112,13 @@ export const getCasos = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-// PATCH /casos/:id/cerrar (El cierre Maestro con Lógica Financiera)
+// --- REEMPLAZA SOLO LA FUNCIÓN cerrarCaso ---
 export const cerrarCaso = async (req, res) => {
   const { id: casoId } = req.params;
   const { id: tecnicoId } = req.user;
   const {
-    metodoPago, // 'EFECTIVO' o 'TRANSFERENCIA'/'TARJETA'
-    montoCobrado, // Lo que pagó el cliente (Ej: 400)
+    metodoPago, // 'EFECTIVO', 'TRANSFERENCIA', 'TARJETA'
+    montoCobrado,
     calificacionCliente,
     requiereCotizacion,
     notasCierre,
@@ -125,15 +126,12 @@ export const cerrarCaso = async (req, res) => {
   } = req.body;
 
   try {
-    // 1. Obtener Configuración Financiera (Base $200)
-    const config = await getFinancialConfig();
-    let COMISION_BASE = config['PAGO_VISITA_BASE'] || 200;
+    // 1. Obtener Tarifas Vigentes de la BD
+    const config = await getFinancialConfigInternal();
+    // Si no encuentra el valor en BD, usa 200 por seguridad
+    const COMISION_BASE = config['PAGO_VISITA_BASE'] || 200;
 
-    // Lógica para Foráneos/Extras (Simplificada para MVP, luego el Admin ajusta)
-    // Si el cobro fue inusualmente alto, podrías marcar un flag, 
-    // pero por ahora mantenemos la comisión base y el Admin ajusta con Bonos/Ajustes.
-
-    // 2. Actualizar Caso
+    // 2. Actualizar Caso (Datos operativos)
     const { error: updateError } = await supabaseAdmin
       .from('casos')
       .update({
@@ -141,55 +139,58 @@ export const cerrarCaso = async (req, res) => {
         fecha_cierre: new Date(),
         metodo_pago_cierre: metodoPago,
         monto_cobrado: montoCobrado,
-        monto_pagado_tecnico: COMISION_BASE, // Se registra lo "estándar"
+        monto_pagado_tecnico: COMISION_BASE, // Guardamos cuánto se pagó en ese momento histórico
         requiere_cotizacion: requiereCotizacion,
         notas_cierre: notasCierre,
         calificacion_servicio_cliente: calificacionCliente,
-        tecnico_id: tecnicoId // Aseguramos propiedad
+        tecnico_id: tecnicoId
       })
       .eq('id', casoId);
 
     if (updateError) throw updateError;
 
-    // 3. MOVIMIENTOS DE BILLETERA (El Corazón del Sistema)
+    // 3. MOVIMIENTOS DE BILLETERA (Lógica: Técnico como Cajero)
     const transacciones = [];
 
-    // A. LA COMISIÓN (Siempre suma a favor del técnico)
+    // A. LA COMISIÓN (Siempre suma a favor del técnico: +$200)
     transacciones.push({
       tecnico_id: tecnicoId,
       caso_id: casoId,
       tipo: 'VISITA_COMISION',
-      monto: COMISION_BASE, // +200
+      monto: COMISION_BASE,
       descripcion: `Comisión Caso #${casoId}`,
-      estado: 'APROBADO' // La comisión es automática
+      estado: 'APROBADO'
     });
 
-    // B. EL DINERO FÍSICO (Solo resta si el técnico lo cobró)
+    // B. EL COBRO EN EFECTIVO (Resta porque el técnico se quedó el dinero: -$400)
     if (metodoPago === 'EFECTIVO') {
       transacciones.push({
         tecnico_id: tecnicoId,
         caso_id: casoId,
         tipo: 'COBRO_EFECTIVO',
-        monto: -Math.abs(montoCobrado), // -400 (Deuda total generada)
+        monto: -Math.abs(montoCobrado), // Aseguramos que sea negativo
         descripcion: `Retención Efectivo Caso #${casoId}`,
         estado: 'APROBADO'
       });
     }
-    // NOTA: Si es Transferencia, no restamos nada, por lo que el saldo del técnico sube +200.
+    // NOTA: Si fue Transferencia, no restamos nada. 
+    // Resultado neto Transferencia: +$200 (Ganancia pura en saldo).
+    // Resultado neto Efectivo ($400): +$200 - $400 = -$200 (Deuda con empresa).
 
-    // Insertar
+    // Insertar Transacciones
     const { error: walletError } = await supabaseAdmin
       .from('billetera_transacciones')
       .insert(transacciones);
 
     if (walletError) throw walletError;
 
-    // 4. (Opcional) Actualizar Semáforo Cliente si cambió
+    // 4. Actualizar Semáforo CRM (Opcional, si enviaste el dato)
     if (tipoClienteCRM) {
-      // Lógica para actualizar tabla clientes...
+      // Aquí podrías actualizar la tabla clientes si tienes el cliente_id a mano, 
+      // o hacerlo en un paso separado. Por ahora lo dejamos listo para el futuro.
     }
 
-    res.status(200).json({ success: true });
+    res.status(200).json({ success: true, message: 'Caso cerrado y finanzas calculadas.' });
 
   } catch (error) {
     console.error('Error cerrando caso:', error);

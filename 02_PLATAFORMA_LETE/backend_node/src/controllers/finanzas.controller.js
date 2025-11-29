@@ -5,7 +5,7 @@ export const getResumenFinanciero = async (req, res) => {
     const { tecnicoId } = req.params;
 
     try {
-        // Obtenemos transacciones APROBADAS o PENDIENTES
+        // Traemos todo lo que NO haya sido rechazado por el admin
         const { data, error } = await supabaseAdmin
             .from('billetera_transacciones')
             .select('*')
@@ -15,11 +15,11 @@ export const getResumenFinanciero = async (req, res) => {
 
         if (error) throw error;
 
-        // Calcular saldo en Javascript
+        // Calculamos el saldo sumando todo
         const saldoTotal = data.reduce((acc, curr) => acc + Number(curr.monto), 0);
 
         res.json({
-            saldo_actual: saldoTotal,
+            saldo_actual: saldoTotal, // Si es negativo, debe dinero. Si es positivo, se le debe.
             historial: data
         });
 
@@ -28,31 +28,30 @@ export const getResumenFinanciero = async (req, res) => {
     }
 };
 
-// POST /api/finanzas/reportar-pago
-// El técnico sube foto de su depósito
+// POST /api/finanzas/reportar-pago (El técnico avisa que ya depositó)
 export const reportarPagoSemanal = async (req, res) => {
     const { tecnicoId, monto, comprobanteUrl } = req.body;
 
     try {
-        const { data, error } = await supabaseAdmin
+        const { error } = await supabaseAdmin
             .from('billetera_transacciones')
             .insert({
                 tecnico_id: tecnicoId,
                 tipo: 'PAGO_SEMANAL',
-                monto: Number(monto), // Positivo porque está "pagando" su deuda
+                monto: Math.abs(monto), // Positivo, porque está "pagando" su deuda
                 descripcion: 'Depósito semanal reportado',
                 comprobante_url: comprobanteUrl,
-                estado: 'EN_REVISION' // Importante: Requiere aprobación Admin
+                estado: 'EN_REVISION' // <--- Requiere tu aprobación
             });
 
         if (error) throw error;
-        res.json({ success: true, message: 'Pago reportado' });
+        res.json({ success: true, message: 'Pago reportado correctamente' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 };
 
-// PUT /api/finanzas/aprobar-transaccion/:id (ADMIN ONLY)
+// PUT /api/finanzas/aprobar/:id (Admin aprueba o rechaza)
 export const aprobarTransaccion = async (req, res) => {
     const { id } = req.params;
     const { accion } = req.body; // 'APROBAR' o 'RECHAZAR'
@@ -60,6 +59,7 @@ export const aprobarTransaccion = async (req, res) => {
     try {
         const nuevoEstado = accion === 'APROBAR' ? 'APROBADO' : 'RECHAZADO';
 
+        // Si se rechaza, el monto deja de contar en el saldo (gracias al filtro del getResumen)
         const { error } = await supabaseAdmin
             .from('billetera_transacciones')
             .update({
@@ -75,28 +75,23 @@ export const aprobarTransaccion = async (req, res) => {
     }
 };
 
-// POST /api/finanzas/bono (Admin Only)
+// POST /api/finanzas/bono (Admin regala dinero por buen servicio)
 export const otorgarBono = async (req, res) => {
-    const { tecnicoId, monto, motivo, casoId } = req.body; // casoId es opcional
+    const { tecnicoId, monto, motivo } = req.body;
 
     try {
         const { error } = await supabaseAdmin
             .from('billetera_transacciones')
             .insert({
                 tecnico_id: tecnicoId,
-                caso_id: casoId || null,
                 tipo: 'BONO',
-                monto: Number(monto), // +100
+                monto: Math.abs(monto), // Siempre positivo
                 descripcion: motivo || 'Bono por desempeño',
-                estado: 'APROBADO'
+                estado: 'APROBADO' // Aprobado directo porque lo hace el admin
             });
 
         if (error) throw error;
-
-        // AQUÍ PODRÍAS DISPARAR NOTIFICACIÓN PUSH AL TÉCNICO
-        // sendPushNotification(tecnicoId, "¡Has recibido un bono de $100!");
-
-        res.json({ success: true, message: 'Bono aplicado correctamente' });
+        res.json({ success: true, message: 'Bono aplicado' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
