@@ -242,3 +242,34 @@
     border-radius: 8px;
     font-size: 1rem;
 }
+
+/* Contenedor de botones de acción */
+.acciones-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 1.5rem;
+}
+
+.btn-reportar {
+    margin-top: 0 !important;
+}
+
+/* Reset margen anterior */
+
+.btn-gasto {
+    background-color: #f97316;
+    /* Naranja */
+    color: white;
+    border: none;
+    padding: 1rem;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 6px -1px rgba(249, 115, 22, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+}

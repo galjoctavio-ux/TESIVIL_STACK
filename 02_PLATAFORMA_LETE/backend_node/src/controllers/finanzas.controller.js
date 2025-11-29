@@ -119,7 +119,7 @@ export const aprobarTransaccion = async (req, res) => {
     try {
         const nuevoEstado = accion === 'APROBAR' ? 'APROBADO' : 'RECHAZADO';
 
-        // Actualizamos y traemos el tecnico_id para notificarle
+        // Traemos datos extra (tipo y descripción) para el mensaje
         const { data: tx, error } = await supabaseAdmin
             .from('billetera_transacciones')
             .update({
@@ -128,20 +128,34 @@ export const aprobarTransaccion = async (req, res) => {
                 aprobado_por: adminId
             })
             .eq('id', id)
-            .select('tecnico_id, monto')
+            .select('tecnico_id, monto, tipo, descripcion')
             .single();
 
         if (error) throw error;
 
         res.json({ success: true, estado: nuevoEstado });
 
-        // --- NOTIFICACIÓN ASÍNCRONA ---
+        // --- NOTIFICACIÓN INTELIGENTE ---
         if (tx && tx.tecnico_id) {
-            const mensaje = accion === 'APROBAR'
-                ? `✅ Tu depósito de $${tx.monto} fue APROBADO.`
-                : `❌ Tu depósito de $${tx.monto} fue RECHAZADO.`;
+            let titulo = 'Actualización Financiera';
+            let cuerpo = '';
 
-            await enviarPushAlTecnico(tx.tecnico_id, 'Actualización Financiera', mensaje);
+            // Personalizamos el mensaje según el tipo
+            if (tx.tipo === 'GASTO_OPERATIVO') {
+                titulo = accion === 'APROBAR' ? '✅ Gasto Aprobado' : '❌ Gasto Rechazado';
+                cuerpo = accion === 'APROBAR'
+                    ? `Se validó tu gasto de $${tx.monto}. Se ha sumado a tu saldo.`
+                    : `El gasto "${tx.descripcion}" fue rechazado. Revisa con administración.`;
+            } else if (tx.tipo === 'PAGO_SEMANAL') {
+                titulo = accion === 'APROBAR' ? '✅ Depósito Recibido' : '❌ Depósito Rechazado';
+                cuerpo = accion === 'APROBAR'
+                    ? `Tu abono de $${tx.monto} ha sido aplicado a tu deuda.`
+                    : `No pudimos validar tu depósito de $${tx.monto}.`;
+            } else {
+                cuerpo = `Tu movimiento de $${tx.monto} fue ${nuevoEstado}.`;
+            }
+
+            await enviarPushAlTecnico(tx.tecnico_id, titulo, cuerpo);
         }
 
     } catch (error) {
@@ -176,6 +190,30 @@ export const otorgarBono = async (req, res) => {
             `Se te acreditaron $${monto} por: ${motivo}`
         );
 
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// 1. NUEVA FUNCIÓN: Reportar Gasto
+// POST /api/finanzas/reportar-gasto
+export const reportarGasto = async (req, res) => {
+    const { tecnicoId, monto, descripcion, comprobanteUrl } = req.body;
+
+    try {
+        const { error } = await supabaseAdmin
+            .from('billetera_transacciones')
+            .insert({
+                tecnico_id: tecnicoId,
+                tipo: 'GASTO_OPERATIVO',
+                monto: Math.abs(monto), // POSITIVO (Suma al saldo del técnico, reduce su deuda)
+                descripcion: descripcion || 'Gasto operativo',
+                comprobante_url: comprobanteUrl, // Foto del ticket
+                estado: 'EN_REVISION'
+            });
+
+        if (error) throw error;
+        res.json({ success: true, message: 'Gasto reportado correctamente' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
