@@ -25,7 +25,7 @@ export const enviarReportePorEmail = async (clienteEmail, clienteNombre, pdfUrl,
     return;
   }
 
-  const hallazgosSeguros = Array.isArray(listaHallazgos) ? listaHallazgos : [];
+  const hallazgosSeguros = Array.isArray(causasAltoConsumo) ? causasAltoConsumo : [];
 
   // Generar la lista de causas de alto consumo
   const causasHtml = hallazgosSeguros.length > 0

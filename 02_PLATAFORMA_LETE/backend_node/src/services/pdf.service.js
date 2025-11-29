@@ -111,7 +111,7 @@ const generarDiagnosticoIA = async (datos) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const response = await axios.post(url, {
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 200 }
+      generationConfig: { temperature: 0.3, maxOutputTokens: 8000 }
     });
     return response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "Revisión técnica completada.";
   } catch (error) {
