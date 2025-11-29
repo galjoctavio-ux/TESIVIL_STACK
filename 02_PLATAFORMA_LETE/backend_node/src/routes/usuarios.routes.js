@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { requireAuth, isAdmin } from '../middleware/auth.middleware.js';
 // --- MODIFICADO: Importar nuevo controlador ---
-import { 
-  getTecnicos, 
-  createTecnico, 
+import {
+  getTecnicos,
+  createTecnico,
   deleteTecnico,
-  getEaIdFromSupabaseId // <-- AÑADIDO
+  getEaIdFromSupabaseId, // <-- AÑADIDO
+  getUsuarios // <--- 1. AGREGAR AQUÍ LA IMPORTACIÓN
 } from '../controllers/usuarios.controller.js';
 
 const router = Router();
@@ -21,6 +22,7 @@ router.get(
 
 // --- Rutas existentes ---
 router.use(requireAuth, isAdmin);
+router.get('/', getUsuarios);
 router.get('/tecnicos', getTecnicos);
 router.post('/', createTecnico);
 router.delete('/tecnicos/:id', deleteTecnico);

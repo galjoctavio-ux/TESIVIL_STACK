@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';               // <-- ¡NUEVO!
 export const getTecnicos = async (req, res) => {
   try {
     console.log('Obteniendo lista de técnicos desde perfiles...');
-    
+
     // 1. Consultamos directo a Supabase (¡Mucho más rápido!)
     // Pedimos explícitamente el ID (UUID) y el ID de E!A
     const { data: profiles, error } = await supabaseAdmin
@@ -20,13 +20,13 @@ export const getTecnicos = async (req, res) => {
     // 2. Mapeamos para que el Frontend reciba exactamente lo que espera
     const tecnicos = profiles.map(profile => ({
       id: profile.id,            // Para los componentes nuevos (Select del Modal)
-      
+
       // --- AGREGA ESTA LÍNEA PARA REVIVIR TU PANEL ---
       id_supabase: profile.id,   // Para los componentes viejos (Lista de Técnicos)
       // -----------------------------------------------
-      
+
       nombre: profile.nombre,
-      ea_id: profile.ea_user_id, 
+      ea_id: profile.ea_user_id,
       sincronizado: !!profile.ea_user_id
     }));
 
@@ -120,7 +120,7 @@ export const createTecnico = async (req, res) => {
     // --- TAREA 2 (NUEVO ORDEN): Crear el usuario en E!A (Tabla "ea_users") ---
     // Movemos esta tarea aquí para obtener el ID antes de crear el perfil.
     console.log('TAREA 2: Creando perfil en Easy!Appointments (ea_users)...');
-    
+
     const [firstName, ...lastNameParts] = nombre.split(' ');
     const lastName = lastNameParts.join(' ') || 'Técnico';
     const ID_ROL_PROVEEDOR = 2; // (Rol de Proveedor)
@@ -130,7 +130,7 @@ export const createTecnico = async (req, res) => {
       (first_name, last_name, email, language, timezone, id_roles) 
       VALUES (?, ?, ?, 'es', 'America/Mexico_City', ?);
     `;
-    
+
     const valuesUser = [
       firstName,
       lastName,
@@ -140,7 +140,7 @@ export const createTecnico = async (req, res) => {
 
     const [userResult] = await eaPool.query(sqlInsertUser, valuesUser);
     createdEaUserId = userResult.insertId; // Guardamos el ID para las siguientes tareas
-    
+
     console.log(`TAREA 2: Perfil de E!A creado con ID: ${createdEaUserId}.`);
 
 
@@ -157,7 +157,7 @@ export const createTecnico = async (req, res) => {
       })
       .select()
       .single();
-    
+
     if (profileError) throw new Error(`Error Supabase Profile: ${profileError.message}`);
     console.log('TAREA 3: Perfil de Supabase creado y vinculado.');
 
@@ -169,11 +169,11 @@ export const createTecnico = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const defaultWorkingPlan = {
-      "monday": {"start":"09:00", "end":"17:00", "breaks":[]},
-      "tuesday": {"start":"09:00", "end":"17:00", "breaks":[]},
-      "wednesday": {"start":"09:00", "end":"17:00", "breaks":[]},
-      "thursday": {"start":"09:00", "end":"17:00", "breaks":[]},
-      "friday": {"start":"09:00", "end":"17:00", "breaks":[]},
+      "monday": { "start": "09:00", "end": "17:00", "breaks": [] },
+      "tuesday": { "start": "09:00", "end": "17:00", "breaks": [] },
+      "wednesday": { "start": "09:00", "end": "17:00", "breaks": [] },
+      "thursday": { "start": "09:00", "end": "17:00", "breaks": [] },
+      "friday": { "start": "09:00", "end": "17:00", "breaks": [] },
       "saturday": null,
       "sunday": null
     };
@@ -183,7 +183,7 @@ export const createTecnico = async (req, res) => {
       (id_users, username, password, working_plan) 
       VALUES (?, ?, ?, ?);
     `;
-    
+
     const valuesSettings = [
       createdEaUserId,
       email,
@@ -197,9 +197,9 @@ export const createTecnico = async (req, res) => {
 
     // --- TAREA 5: Vincular Proveedor al Servicio (Tabla "ea_services_providers") ---
     console.log('TAREA 5: Vinculando proveedor a servicio...');
-    
+
     const ID_SERVICIO_DEFAULT = 1; // (Verifica que tu servicio principal sea el ID 1)
-    
+
     await eaPool.query(
       'INSERT INTO ea_services_providers (id_services, id_users) VALUES (?, ?)',
       [ID_SERVICIO_DEFAULT, createdEaUserId]
@@ -238,14 +238,40 @@ export const createTecnico = async (req, res) => {
       await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
       console.log('ROLLBACK: Usuario de Auth eliminado.');
     }
-    
+
     if (error.code === 'ER_DUP_ENTRY' || (error.message && error.message.includes('1062'))) {
-        return res.status(409).json({ error: 'El email o nombre de usuario ya existe en Easy!Appointments.' });
+      return res.status(409).json({ error: 'El email o nombre de usuario ya existe en Easy!Appointments.' });
     }
 
-    res.status(500).json({ 
-      error: 'Error al crear técnico sincronizado', 
-      details: error.message 
+    res.status(500).json({
+      error: 'Error al crear técnico sincronizado',
+      details: error.message
     });
+  }
+};
+
+// GET /api/usuarios (Soporta ?rol=tecnico)
+export const getUsuarios = async (req, res) => {
+  const { rol } = req.query;
+
+  try {
+    let query = supabaseAdmin
+      .from('profiles')
+      .select('id, nombre, rol, ea_user_id'); // Traemos datos básicos
+
+    if (rol) {
+      query = query.eq('rol', rol);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    // (Opcional) Si necesitas el email y no está en profiles, 
+    // por ahora devolvemos lo que hay en profiles.
+    res.json(data);
+  } catch (error) {
+    console.error('Error al listar usuarios:', error);
+    res.status(500).json({ error: error.message });
   }
 };
