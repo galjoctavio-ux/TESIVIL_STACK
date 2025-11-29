@@ -54,7 +54,7 @@ export const processRevision = async (payload, tecnicoAuth) => {
     const { data: perfil, error: perfilError } = await supabaseAdmin
       .from('profiles')
       .select('nombre, firma_url')
-      .eq('user_id', tecnicoAuth.id)
+      .eq('id', tecnicoAuth.id)
       .maybeSingle();
 
     if (!perfilError && perfil) {
@@ -74,9 +74,19 @@ export const processRevision = async (payload, tecnicoAuth) => {
   const datosDeTrabajo = { ...revisionData };
   datosDeTrabajo.caso_id = Number(datosDeTrabajo.caso_id);
 
-  // Lecturas eléctricas
+  // --- LECTURAS ELÉCTRICAS (RED - MULTIFASE) ---
+  const tipoServicio = datosDeTrabajo.tipo_servicio || 'Monofásico';
   const iFase1 = safeParseFloat(datosDeTrabajo.corriente_red_f1, 0);
+  const iFase2 = safeParseFloat(datosDeTrabajo.corriente_red_f2, 0);
+  const iFase3 = safeParseFloat(datosDeTrabajo.corriente_red_f3, 0);
   const iNeutro = safeParseFloat(datosDeTrabajo.corriente_red_n, 0);
+
+  // --- LECTURAS ELÉCTRICAS (PANELES) ---
+  // Aseguramos conversión a float para evitar errores en cálculos
+  datosDeTrabajo.corriente_paneles_f1 = safeParseFloat(datosDeTrabajo.corriente_paneles_f1, 0);
+  datosDeTrabajo.corriente_paneles_f2 = safeParseFloat(datosDeTrabajo.corriente_paneles_f2, 0);
+  datosDeTrabajo.corriente_paneles_f3 = safeParseFloat(datosDeTrabajo.corriente_paneles_f3, 0);
+
   const iFugaPinza = safeParseFloat(datosDeTrabajo.corriente_fuga_f1, 0);
   const voltaje = safeParseFloat(datosDeTrabajo.voltaje_medido, 127);
   const sePuedeApagar = datosDeTrabajo.se_puede_apagar_todo === true || datosDeTrabajo.se_puede_apagar_todo === 'true';
@@ -87,16 +97,43 @@ export const processRevision = async (payload, tecnicoAuth) => {
   const condicionInfra = datosDeTrabajo.condicion_infraestructura || 'Regular';
   const midieronCargasMenores = datosDeTrabajo.se_midieron_cargas_menores === true || datosDeTrabajo.se_midieron_cargas_menores === 'true';
 
-  // Cálculo inteligente de fuga
+  // --- CÁLCULO INTELIGENTE DE FUGA (Multifase) ---
+  let corrienteFugaCalculada = 0;
+
   if (sePuedeApagar) {
-    datosDeTrabajo.corriente_fuga_f1 = iFase1;
+    // Si se apaga todo, sumamos lo que marque la pinza en todas las fases
+    corrienteFugaCalculada = iFase1 + iFase2 + iFase3;
   } else {
-    if (iNeutro > (iFase1 + 0.5)) {
-      datosDeTrabajo.corriente_fuga_f1 = iNeutro - iFase1;
-    } else {
-      datosDeTrabajo.corriente_fuga_f1 = iFugaPinza;
+    // Lógica por tipo de servicio
+    switch (tipoServicio) {
+      case 'Trifásico':
+        // Fórmula: abs(F1 + F2 + F3) - N
+        const sumaTrifasica = iFase1 + iFase2 + iFase3;
+        const diffTrifasica = Math.abs(sumaTrifasica) - iNeutro;
+        corrienteFugaCalculada = diffTrifasica > 0 ? diffTrifasica : 0;
+        break;
+
+      case 'Bifásico':
+        // Fórmula: abs(F1 + F2) - N
+        const sumaBifasica = iFase1 + iFase2;
+        const diffBifasica = Math.abs(sumaBifasica) - iNeutro;
+        corrienteFugaCalculada = diffBifasica > 0 ? diffBifasica : 0;
+        break;
+
+      case 'Monofásico':
+      default:
+        // Lógica original Monofásica
+        if (iNeutro > (iFase1 + 0.5)) {
+          corrienteFugaCalculada = iNeutro - iFase1;
+        } else {
+          corrienteFugaCalculada = iFugaPinza;
+        }
+        break;
     }
   }
+
+  // Actualizamos el dato maestro de fuga para usarlo en el resto del proceso
+  datosDeTrabajo.corriente_fuga_f1 = corrienteFugaCalculada;
 
   // Procesamiento y sanitización de equipos
   const equiposSanitizados = (equiposData || []).map(eq => ({
@@ -109,27 +146,56 @@ export const processRevision = async (payload, tecnicoAuth) => {
     cantidad: safeParseFloat(eq.cantidad, 1)
   }));
 
-  // Consumo por equipo
+  // Consumo por equipo (Cálculo base)
   let equiposCalculados = calcularConsumoEquipos(equiposSanitizados, voltaje) || [];
   equiposCalculados.sort((a, b) => (b.kwh_bimestre_calculado || 0) - (a.kwh_bimestre_calculado || 0));
 
-  // Totales / ajuste por cargas menores
+  // --- CÁLCULOS AVANZADOS DE DESPERDICIO ---
+
+  // 1. Fuga en Infraestructura (V * A_Fuga * 24h * 60d / 1000)
+  const kwhFugaInfraestructura = (voltaje * datosDeTrabajo.corriente_fuga_f1 * 24 * 60) / 1000;
+
+  // 2. Ineficiencia de Equipos (Suma total de consumo de equipos Malos o Regulares)
+  let kwhIneficienciaEquipos = 0;
+  equiposCalculados.forEach(eq => {
+    if (eq.estado_equipo === 'Malo' || eq.estado_equipo === 'Regular') {
+      kwhIneficienciaEquipos += (eq.kwh_bimestre_calculado || 0);
+    }
+  });
+
+  // 3. Consumo Auditado Ajustado (Totales / ajuste por cargas menores)
   const totalKwhAuditado = equiposCalculados.reduce((acc, c) => acc + (c.kwh_bimestre_calculado || 0), 0);
   const factorHolgura = midieronCargasMenores ? 1.0 : 1.20;
   const totalAuditadoAjustado = totalKwhAuditado * factorHolgura;
 
-  let kwhDesperdicio = 0;
+  // 4. Consumo No Identificado (Diferencia aritmética vs Recibo CFE)
+  let kwhNoIdentificado = kwhRecibo - totalAuditadoAjustado;
+  if (kwhNoIdentificado < 0) kwhNoIdentificado = 0;
+
+  // 5. TOTAL DESPERDICIO (Sumatoria de los 3 componentes de pérdida)
+  const kwhDesperdicioTotal = kwhFugaInfraestructura + kwhIneficienciaEquipos + kwhNoIdentificado;
+
+  // Porcentaje de impacto
   let porcentajeFuga = 0;
   let alertaFuga = false;
-
   if (kwhRecibo > 0) {
-    kwhDesperdicio = kwhRecibo - totalAuditadoAjustado;
-    if (kwhDesperdicio < 0) kwhDesperdicio = 0;
-    porcentajeFuga = (kwhDesperdicio / kwhRecibo) * 100;
+    porcentajeFuga = (kwhDesperdicioTotal / kwhRecibo) * 100;
     alertaFuga = porcentajeFuga >= 15;
   }
 
-  // Detecciones adicionales (si tus servicios lo proveen)
+  // --- CORRECCIÓN DE DATOS (Sanitización) ---
+
+  // Limpiar [object Object]
+  const causasLimpias = (datosDeTrabajo.causas_alto_consumo || []).map(item => {
+    if (typeof item === 'object' && item !== null) return item.texto || item.value || '';
+    return String(item);
+  }).filter(t => t.trim() !== '');
+
+  datosDeTrabajo.causas_alto_consumo = causasLimpias;
+
+
+  // --- DETECCIONES AUTOMÁTICAS EXTERNAS ---
+
   let resultadoDeteccionFugas = null;
   try {
     if (typeof detectarFugas === 'function') {
@@ -139,16 +205,21 @@ export const processRevision = async (payload, tecnicoAuth) => {
     console.warn('detectarFugas falló:', err?.message || err);
   }
 
+  // Lógica Solar Mejorada: Verifica si hay paneles instalados o corrientes detectadas
   let resultadoVerificarSolar = null;
+  const tienePaneles = datosDeTrabajo.antiguedad_paneles != null ||
+    datosDeTrabajo.corriente_paneles_f1 > 0 ||
+    datosDeTrabajo.cantidad_paneles > 0;
+
   try {
-    if (typeof verificarSolar === 'function' && datosDeTrabajo.antiguedad_paneles != null) {
+    if (typeof verificarSolar === 'function' && tienePaneles) {
       resultadoVerificarSolar = verificarSolar(datosDeTrabajo);
     }
   } catch (err) {
     console.warn('verificarSolar falló:', err?.message || err);
   }
 
-  // Generar textos automáticos
+  // Generar textos automáticos (Diagnósticos IA interna)
   const diagnosticosAuto = generarDiagnosticosAutomaticos(datosDeTrabajo, equiposCalculados, {
     deteccionFugas: resultadoDeteccionFugas,
     verificarSolar: resultadoVerificarSolar
@@ -159,14 +230,16 @@ export const processRevision = async (payload, tecnicoAuth) => {
   // ---------------------------------------------------------
   const datosParaInsertar = { ...datosDeTrabajo };
 
-  // Limpiar campos temporales que no están en la tabla
+  // Limpiar campos temporales que no existen en la tabla 'revisiones'
   delete datosParaInsertar.voltaje_fn;
   delete datosParaInsertar.fuga_total;
   delete datosParaInsertar.amperaje_medido;
-  delete datosParaInsertar.antiguedad_paneles;
+  // delete datosParaInsertar.antiguedad_paneles; // <--- OJO: Si tu columna en BD se llama 'paneles_antiguedad_anos', verifica que el frontend lo mande así.
   delete datosParaInsertar.equiposData;
+  delete datosParaInsertar.caso_id;
 
-  // Campos extra
+  // Asignación de campos obligatorios y calculados
+  datosParaInsertar.caso_id = datosDeTrabajo.caso_id;
   datosParaInsertar.tecnico_id = tecnicoAuth.id;
   datosParaInsertar.diagnosticos_automaticos = diagnosticosAuto;
   datosParaInsertar.fecha_revision = new Date().toISOString();
@@ -174,10 +247,22 @@ export const processRevision = async (payload, tecnicoAuth) => {
   datosParaInsertar.kwh_recibo_cfe = kwhRecibo;
   datosParaInsertar.condicion_infraestructura = condicionInfra;
   datosParaInsertar.se_midieron_cargas_menores = midieronCargasMenores;
-  // Opcionales: datos de detecciones automatizadas
+
+  // --- NUEVO: ASEGURAR GUARDADO DE DATOS MULTI-FASE Y SOLAR ---
+  // Asignamos explícitamente las variables que leímos en la Parte 2
+  datosParaInsertar.tipo_servicio = tipoServicio;
+  datosParaInsertar.corriente_red_f2 = iFase2;
+  datosParaInsertar.corriente_red_f3 = iFase3;
+  // Para paneles, usamos lo que ya estaba en datosDeTrabajo o 0
+  datosParaInsertar.corriente_paneles_f1 = datosDeTrabajo.corriente_paneles_f1 || 0;
+  datosParaInsertar.corriente_paneles_f2 = datosDeTrabajo.corriente_paneles_f2 || 0;
+  datosParaInsertar.corriente_paneles_f3 = datosDeTrabajo.corriente_paneles_f3 || 0;
+
+  // Guardar resultados de detecciones opcionales si existen
   if (resultadoDeteccionFugas) datosParaInsertar.resultado_deteccion_fugas = resultadoDeteccionFugas;
   if (resultadoVerificarSolar) datosParaInsertar.resultado_verificar_solar = resultadoVerificarSolar;
 
+  // INSERCIÓN DE LA REVISIÓN
   const { data: revData, error: revError } = await supabaseAdmin
     .from('revisiones')
     .insert(datosParaInsertar)
@@ -191,7 +276,7 @@ export const processRevision = async (payload, tecnicoAuth) => {
 
   const newRevisionId = revData.id;
 
-  // Insertar equipos revisados
+  // INSERCIÓN DE EQUIPOS REVISADOS
   if (equiposCalculados.length > 0) {
     const equiposInsert = equiposCalculados.map(eq => ({
       revision_id: newRevisionId,
@@ -212,18 +297,19 @@ export const processRevision = async (payload, tecnicoAuth) => {
     }
   }
 
-  // Actualizar status del caso y obtener cliente (relacional)
+  // ACTUALIZACIÓN DEL CASO Y RECUPERACIÓN DE CLIENTE
   let casoUpdated = null;
   try {
+    // Mantenemos el status 'en_curso' para permitir venta posterior (Tu corrección anterior)
     const { data: casoData, error: casoError } = await supabaseAdmin
       .from('casos')
-      .update({ status: 'completado' })
+      .update({ status: 'en_curso' })
       .eq('id', datosDeTrabajo.caso_id)
       .select('id, cliente:clientes(nombre_completo, direccion_principal, email)')
-      .single();
+      .maybeSingle();
 
     if (casoError) {
-      console.warn('No se pudo actualizar el caso:', casoError.message || casoError);
+      console.warn('No se pudo actualizar el caso:', casoError.message);
     } else {
       casoUpdated = casoData;
     }
@@ -231,7 +317,7 @@ export const processRevision = async (payload, tecnicoAuth) => {
     console.warn('Error actualizando caso:', err);
   }
 
-  // Si no obtuvimos cliente por la actualización, intentamos leer caso sin update
+  // Fallback: Si no obtuvimos cliente por la actualización
   if (!casoUpdated) {
     try {
       const { data: casoFetch, error: casoFetchErr } = await supabaseAdmin
@@ -246,28 +332,32 @@ export const processRevision = async (payload, tecnicoAuth) => {
     }
   }
 
+
   // ---------------------------------------------------------
   // 3. Procesamiento de firma del cliente (si viene)
   // ---------------------------------------------------------
   let firmaClienteUrl = null;
   if (firmaBase64) {
     try {
+      // Decodificamos el base64 que viene del canvas
       const matches = firmaBase64.match(/^data:(.+);base64,(.+)$/);
       if (matches && matches.length === 3) {
         const contentType = matches[1];
         const bufferData = Buffer.from(matches[2], 'base64');
         const filePath = `firmas/revision-cliente-${newRevisionId}.png`;
+
+        // Subimos la imagen al bucket 'reportes'
         const publicUrl = await uploadBufferToStorage('reportes', filePath, bufferData, contentType);
         if (publicUrl) {
           firmaClienteUrl = publicUrl;
-          // Guardar en la revisión
+          // Actualizamos la revisión con la URL de la firma
           await supabaseAdmin.from('revisiones').update({ firma_url: firmaClienteUrl }).eq('id', newRevisionId);
         }
       } else {
         console.warn('Formato de firmaBase64 no reconocido.');
       }
     } catch (errFirma) {
-      console.error('Error procesando firma:', errFirma);
+      console.error('Error procesando firma del cliente:', errFirma);
     }
   }
 
@@ -275,6 +365,8 @@ export const processRevision = async (payload, tecnicoAuth) => {
   // 4. Generación de PDF
   // ---------------------------------------------------------
   let pdfUrl = null;
+
+  // Preparamos el objeto con TODA la info para pintar el reporte
   const datosParaPdf = {
     header: {
       id: newRevisionId,
@@ -283,29 +375,31 @@ export const processRevision = async (payload, tecnicoAuth) => {
       cliente_direccion: casoUpdated?.cliente?.direccion_principal || 'Dirección no registrada',
       cliente_email: revData.cliente_email || casoUpdated?.cliente?.email || '',
       tecnico_nombre: nombreIngeniero,
-      firma_ingeniero_url: firmaIngenieroUrl,
+      firma_ingeniero_url: firmaIngenieroUrl, // La firma que recuperamos en el Bloque 0
       tarifa,
       condicion_infra: condicionInfra
     },
     mediciones: {
       ...datosDeTrabajo,
+      // Aseguramos que vaya la corriente de fuga calculada/decidida (Mono/Bi/Tri)
       corriente_fuga_f1: datosDeTrabajo.corriente_fuga_f1
     },
     finanzas: {
       kwh_recibo: kwhRecibo,
-      kwh_auditado: totalKwhAuditado,
-      kwh_ajustado: totalAuditadoAjustado,
-      kwh_desperdicio: kwhDesperdicio,
+      kwh_ajustado: totalAuditadoAjustado, // CORREGIDO: Coincide con lo que espera pdf.service.js
+      kwh_desperdicio: kwhDesperdicioTotal,
       porcentaje_desperdicio: porcentajeFuga,
       alerta_fuga: alertaFuga
     },
-    detecciones: {
-      fugas: resultadoDeteccionFugas,
-      solar: resultadoVerificarSolar
+    // Desglose para la tabla final de pérdidas
+    desglose_desperdicio: {
+      fuga_infraestructura: kwhFugaInfraestructura,
+      equipos_ineficientes: kwhIneficienciaEquipos,
+      consumo_no_identificado: kwhNoIdentificado
     },
     equipos: equiposCalculados,
     consumo_total_estimado: totalAuditadoAjustado,
-    causas_alto_consumo: revData.diagnosticos_automaticos || [],
+    causas_alto_consumo: causasLimpias, // Pasamos la lista limpia
     recomendaciones_tecnico: revData.recomendaciones_tecnico || '',
     firma_cliente_url: firmaClienteUrl
   };
@@ -316,12 +410,14 @@ export const processRevision = async (payload, tecnicoAuth) => {
 
     if (pdfBuffer) {
       const pdfPath = `reportes/reporte-${newRevisionId}.pdf`;
+      // Subimos el PDF generado
       const publicPdfUrl = await uploadBufferToStorage('reportes', pdfPath, pdfBuffer, 'application/pdf');
+
       if (publicPdfUrl) {
         pdfUrl = publicPdfUrl;
-        // Guardar URL en la revisión
+        // Guardar URL del PDF en la revisión
         await supabaseAdmin.from('revisiones').update({ pdf_url: pdfUrl }).eq('id', newRevisionId);
-        console.log('PDF generado y subido:', pdfUrl);
+        console.log('PDF generado y subido correctamente:', pdfUrl);
       } else {
         console.error('No se pudo obtener URL pública del PDF subido.');
       }
@@ -329,7 +425,7 @@ export const processRevision = async (payload, tecnicoAuth) => {
       console.warn('generarPDF devolvió buffer vacío o nulo.');
     }
   } catch (pdfError) {
-    console.error('Error en proceso de PDF:', pdfError);
+    console.error('Error crítico en proceso de PDF:', pdfError);
   }
 
   // ---------------------------------------------------------
@@ -345,7 +441,7 @@ export const processRevision = async (payload, tecnicoAuth) => {
       const manuales = revData.causas_alto_consumo || [];
       const automaticos = revData.diagnosticos_automaticos || [];
 
-      // B. UNIFICACIÓN Y LIMPIEZA (Aquí corregimos el [object Object])
+      // B. UNIFICACIÓN Y LIMPIEZA
       // Creamos una sola lista combinando ambas fuentes.
       let hallazgosCombinados = [
         ...manuales,
@@ -353,9 +449,9 @@ export const processRevision = async (payload, tecnicoAuth) => {
       ];
 
       // C. FILTRADO INTELIGENTE
-      // 1. Aseguramos que cada elemento sea TEXTO (String). Si es un objeto, lo ignoramos o extraemos texto.
+      // 1. Aseguramos que cada elemento sea TEXTO (String).
       // 2. Eliminamos duplicados (Set).
-      // 3. Filtramos valores vacíos o nulos.
+      // 3. Filtramos valores vacíos.
 
       const listaFinalParaEmail = hallazgosCombinados
         .map(item => {
@@ -378,7 +474,7 @@ export const processRevision = async (payload, tecnicoAuth) => {
         clienteEmail,
         casoUpdated?.cliente?.nombre_completo || 'Cliente Estimado',
         pdfUrl,
-        listaFinalParaEmail // <--- Aquí va la lista limpia, sin objetos raros
+        listaFinalParaEmail // Aquí va la lista limpia, sin objetos raros
       );
 
     } catch (mailErr) {

@@ -4,6 +4,14 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// ICONOS SVG (Para evitar las 'X' o cuadros vacíos) - SOLUCIÓN PUNTO 4
+const ICONS = {
+  check: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
+  alert: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
+  warning: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
+  fire: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-2.246-4.004-3.5-5.5A2.5 2.5 0 0 1 5 6c0 1.5 1 2.5 3 3.5a2.5 2.5 0 0 0 0 5z"></path><path d="M12 22c5.523 0 10-4.477 10-10a10 10 0 0 0-10-10C6.477 2 2 6.477 2 12c0 5.523 4.477 10 10 10z"></path></svg>`
+};
+
 // ---------------------------------------------------------
 // 1. ESTILOS VISUALES (DISEÑO PREMIUM)
 // ---------------------------------------------------------
@@ -56,6 +64,10 @@ const styles = `
   .main-table { width: 100%; border-collapse: collapse; font-size: 10px; }
   .main-table th { text-align: left; padding: 8px; background: #f3f4f6; color: #4b5563; font-weight: 700; text-transform: uppercase; }
   .main-table td { padding: 8px; border-bottom: 1px solid #e5e7eb; }
+
+  /* COLORES DE FILAS - SOLUCIÓN PUNTO 2 */
+  .row-malo { background-color: #fee2e2; color: #991b1b; } /* Rojo suave */
+  .row-regular { background-color: #ffedd5; color: #9a3412; } /* Naranja suave */
   
   .badge { padding: 2px 6px; border-radius: 10px; font-size: 8px; font-weight: 800; text-transform: uppercase; }
   .b-malo { background: #fee2e2; color: #991b1b; }
@@ -70,11 +82,18 @@ const styles = `
   .trigger-content h3 { margin: 0; font-size: 12px; font-weight: 900; text-transform: uppercase; }
   .trigger-content p { margin: 2px 0 0 0; font-size: 10px; opacity: 0.9; }
 
-  /* FOOTER */
+  /* TABLA DESGLOSE - SOLUCIÓN PUNTO 6 */
+  .breakdown-table { width: 100%; border: 1px solid #e5e7eb; border-radius: 6px; margin-top: 20px; font-size: 10px; }
+  .breakdown-table td { padding: 8px; border-bottom: 1px solid #eee; }
+  .breakdown-header { background: #f3f4f6; font-weight: bold; text-transform: uppercase; }
+  .breakdown-total { background: #111; color: #fff; font-weight: 900; font-size: 12px; }
+
+  /* FOOTER & FIRMAS - SOLUCIÓN PUNTO 5 */
   .footer { margin-top: 40px; display: flex; justify-content: space-between; page-break-inside: avoid; }
-  .sig-box { width: 40%; text-align: center; border-top: 1px solid #d1d5db; padding-top: 10px; }
-  .sig-img { height: 50px; object-fit: contain; }
+  .sig-box { width: 40%; text-align: center; border-top: 1px solid #d1d5db; padding-top: 10px; position: relative; }
+  .sig-img { height: 60px; object-fit: contain; display: block; margin: 0 auto 5px auto; } 
 `;
+
 
 // ---------------------------------------------------------
 // 2. IA GENERATIVA (GEMINI PROMPT REFORZADO)
@@ -144,39 +163,47 @@ const getHtmlReporte = (datos, textoIA) => {
   };
   const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartData))}&w=250&h=250`;
 
-  // B. Lógica Visual de Infraestructura
+  // LOGICA INFRAESTRUCTURA (Reemplazando Emojis por SVGs)
   let infraHtml = '';
   if (header.condicion_infra === 'Malo') {
     infraHtml = `
       <div class="infra-card infra-bad">
-        <div style="font-size:20px;">🚨</div>
-        <div style="font-weight:900; font-size:12px; margin-top:5px;">INSTALACIÓN DE ALTO RIESGO</div>
-        <div style="font-size:9px;">Componentes oxidados, cables viejos (>30 años) o fuera de norma. <strong>Peligro de Incendio.</strong></div>
+        ${ICONS.fire}
+        <div style="font-weight:900; font-size:12px; margin-top:5px;">INSTALACIÓN DE RIESGO</div>
+        <div style="font-size:9px;">Peligro de Incendio o Corto.</div>
       </div>`;
   } else if (header.condicion_infra === 'Regular') {
     infraHtml = `
       <div class="infra-card infra-regular">
-        <div style="font-size:20px;">⚠️</div>
-        <div style="font-weight:900; font-size:12px; margin-top:5px;">REQUIERE MANTENIMIENTO</div>
-        <div style="font-size:9px;">Instalación con desgaste visible. Se recomienda corrección preventiva.</div>
+        ${ICONS.warning}
+        <div style="font-weight:900; font-size:12px; margin-top:5px;">MANTENIMIENTO REQUERIDO</div>
+        <div style="font-size:9px;">Desgaste visible detectado.</div>
       </div>`;
   } else {
     infraHtml = `
       <div class="infra-card infra-good">
-        <div style="font-size:20px;">✅</div>
-        <div style="font-weight:900; font-size:12px; margin-top:5px;">INSTALACIÓN APROBADA</div>
-        <div style="font-size:9px;">Cumple con los estándares de seguridad y operación.</div>
+        ${ICONS.check}
+        <div style="font-weight:900; font-size:12px; margin-top:5px;">INSTALACIÓN CORRECTA</div>
+        <div style="font-size:9px;">Cumple estándares básicos.</div>
       </div>`;
   }
 
-  // C. Tabla de Equipos
+  // LOGICA TABLA EQUIPOS (Colores de filas)
   const rows = equipos.map(eq => {
-    let badge = 'b-bueno';
-    if (eq.estado_equipo === 'Malo') badge = 'b-malo';
-    if (eq.estado_equipo === 'Regular') badge = 'b-regular';
+    let badgeClass = 'b-bueno';
+    let rowClass = ''; // Clase para pintar toda la fila
+
+    if (eq.estado_equipo === 'Malo') {
+      badgeClass = 'b-malo';
+      rowClass = 'row-malo'; // Pinta rojo
+    }
+    if (eq.estado_equipo === 'Regular') {
+      badgeClass = 'b-regular';
+      rowClass = 'row-regular'; // Pinta naranja
+    }
 
     return `
-      <tr>
+      <tr class="${rowClass}">
         <td>
           <div style="font-weight:bold;">${eq.nombre_equipo}</div>
           <div style="font-size:9px; color:#666;">${eq.nombre_personalizado || ''}</div>
@@ -188,6 +215,11 @@ const getHtmlReporte = (datos, textoIA) => {
       </tr>
     `;
   }).join('');
+
+  // SOLUCIÓN PUNTO 3: Mapeo de anomalías (evitar [object Object])
+  const anomaliasHtml = (datos.causas_alto_consumo || [])
+    .map(c => typeof c === 'string' ? `<li>${c}</li>` : '')
+    .join('');
 
   return `
     <!DOCTYPE html>
@@ -301,6 +333,32 @@ const getHtmlReporte = (datos, textoIA) => {
           ${datos.recomendaciones_tecnico || 'Se sugiere proceder con las correcciones marcadas en este reporte.'}
         </p>
       </div>
+
+      ${finanzas.kwh_desperdicio > 0 ? `
+      <div class="section-title" style="margin-top:20px; color:#b91c1c;">Análisis de Pérdidas de Energía</div>
+      <table class="breakdown-table">
+        <tr class="breakdown-header">
+          <td>Origen de la Pérdida</td>
+          <td style="text-align:right;">Impacto Bimestral</td>
+        </tr>
+        <tr>
+          <td>Fuga en Infraestructura (Cableado/Aislamiento)</td>
+          <td style="text-align:right;">${desglose_desperdicio?.fuga_infraestructura?.toFixed(1) || 0} kWh</td>
+        </tr>
+        <tr>
+          <td>Ineficiencia por Equipos (Regular/Malo)</td>
+          <td style="text-align:right;">${desglose_desperdicio?.equipos_ineficientes?.toFixed(1) || 0} kWh</td>
+        </tr>
+        <tr>
+          <td>Consumo Fantasma / No Identificado (Diferencia vs CFE)</td>
+          <td style="text-align:right;">${desglose_desperdicio?.consumo_no_identificado?.toFixed(1) || 0} kWh</td>
+        </tr>
+        <tr class="breakdown-total">
+          <td>TOTAL DESPERDICIO</td>
+          <td style="text-align:right;">${finanzas.kwh_desperdicio.toFixed(1)} kWh</td>
+        </tr>
+      </table>
+      ` : ''}
 
       <div class="footer">
         <div class="sig-box">
