@@ -143,7 +143,7 @@ const generarDiagnosticoIA = async (datos) => {
 // 3. GENERADOR HTML
 // ---------------------------------------------------------
 const getHtmlReporte = (datos, textoIA) => {
-  const { header, finanzas, equipos, mediciones } = datos;
+  const { header, finanzas, equipos, mediciones, desglose_desperdicio } = datos;
 
   // A. Lógica Gráfica QuickChart (Dona)
   const chartData = {
