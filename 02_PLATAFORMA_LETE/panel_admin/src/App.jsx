@@ -9,6 +9,7 @@ import ConfiguracionFinanciera from './pages/ConfiguracionFinanciera';
 import EditarCotizacion from './pages/EditarCotizacion'; // <--- IMPORTACIÓN CORRECTA AQUÍ ARRIBA
 import ProtectedRoute from './components/ProtectedRoute';
 import ConfiguracionPagos from './pages/ConfiguracionPagos';
+import GestionFinanciera from './pages/GestionFinanciera';
 import './App.css';
 import './responsive.css';
 
@@ -43,6 +44,7 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route path="/finanzas-gestion" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><GestionFinanciera /></ProtectedRoute>} />
 
       {/* RUTA DE EDICIÓN MAESTRA (NUEVA) */}
       <Route

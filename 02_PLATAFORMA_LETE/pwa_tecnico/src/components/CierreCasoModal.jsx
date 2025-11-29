@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../apiService';
-import './CierreCasoModal.css'; // Crearemos este CSS rápido abajo
+import './CierreCasoModal.css';
 
 function CierreCasoModal({ caso, onClose, onCaseClosed }) {
     const [step, setStep] = useState(1);
@@ -10,13 +10,25 @@ function CierreCasoModal({ caso, onClose, onCaseClosed }) {
 
     // Estado del Formulario
     const [formData, setFormData] = useState({
-        metodoPago: 'EFECTIVO', // Default
+        metodoPago: 'EFECTIVO',
         montoCobrado: '',
-        calificacionCliente: 5, // Estrellas (1-5)
-        tipoCliente: 'AMABLE', // Semáforo CRM
+        calificacionCliente: 5,
+        tipoCliente: 'AMABLE',
         requiereCotizacion: false,
         notasCierre: ''
     });
+
+    // Lógica visual para la alerta financiera
+    // Nota: Aquí podrías traer el costo base de la API, pero para V1 usaremos el estándar visual
+    const monto = parseFloat(formData.montoCobrado) || 0;
+    const esEfectivo = formData.metodoPago === 'EFECTIVO';
+
+    // Cálculo estimado (Visual)
+    const deudaEstimada = esEfectivo ? monto : 0;
+    // La comisión la sabe el backend, pero aquí podemos dar una pista
+    const mensajeFinanciero = esEfectivo
+        ? `⚠️ Al cobrar $${monto} en efectivo, se generará una deuda por ese monto. Tu comisión se sumará aparte.`
+        : `✅ Al ser transferencia, NO se genera deuda. Recibirás tu comisión en saldo a favor.`;
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -31,8 +43,8 @@ function CierreCasoModal({ caso, onClose, onCaseClosed }) {
     };
 
     const handleSubmit = async () => {
-        if (!formData.montoCobrado) {
-            setError('Por favor indica cuánto cobraste (pon 0 si fue garantía).');
+        if (formData.montoCobrado === '') {
+            setError('Por favor indica el monto cobrado (o 0).');
             return;
         }
 
@@ -40,19 +52,17 @@ function CierreCasoModal({ caso, onClose, onCaseClosed }) {
         setError('');
 
         try {
-            // Llamamos al endpoint que creamos en el Backend Node
             await api.patch(`/casos/${caso.id}/cerrar`, {
                 metodoPago: formData.metodoPago,
                 montoCobrado: parseFloat(formData.montoCobrado),
-                calificacionCliente: formData.calificacionCliente, // 1-5
+                calificacionCliente: formData.calificacionCliente,
                 requiereCotizacion: formData.requiereCotizacion,
                 notasCierre: formData.notasCierre,
-                // Datos extra para el CRM (Semáforo)
                 tipoClienteCRM: formData.tipoCliente
             });
 
             onCaseClosed(); // Refrescar lista
-            onClose(); // Cerrar modal
+            onClose();      // Cerrar modal
         } catch (err) {
             console.error(err);
             setError('Error al cerrar el caso. Intenta de nuevo.');
@@ -60,60 +70,61 @@ function CierreCasoModal({ caso, onClose, onCaseClosed }) {
         }
     };
 
-    // --- RENDERIZADO DEL WIZARD ---
-
+    // Renderizamos en el Body usando Portal
     return createPortal(
         <div className="modal-overlay">
             <div className="modal-content wizard-container">
-                {/* ... (Todo tu contenido del modal, header, steps, etc. igual que antes) ... */}
 
+                {/* HEADER */}
                 <div className="wizard-header">
-                    <h3>Cerrar Caso #{caso.id}</h3>
+                    <h3>Cerrar Caso #{caso?.id}</h3>
                     <span className="step-indicator">Paso {step} de 3</span>
                 </div>
 
-                {error && <p className="error-alert">{error}</p>}
+                {error && <div className="error-alert" style={{ margin: '1rem', padding: '10px', background: '#fee2e2', color: '#ef4444', borderRadius: '8px' }}>{error}</div>}
 
-                {/* Copia aquí tus Steps 1, 2 y 3 exactamente como los tenías */}
                 {/* PASO 1: FINANZAS */}
                 {step === 1 && (
                     <div className="wizard-step">
-                        <h4>💰 Cobro y Finanzas</h4>
-                        {/* ... inputs ... */}
-                        <label>¿Cómo pagó el cliente?</label>
+                        <h4>💰 ¿Cómo pagó el cliente?</h4>
+
                         <div className="payment-toggle">
                             <button
-                                className={formData.metodoPago === 'EFECTIVO' ? 'active' : ''}
+                                className={`payment-btn ${formData.metodoPago === 'EFECTIVO' ? 'active' : ''}`}
                                 onClick={() => setFormData({ ...formData, metodoPago: 'EFECTIVO' })}
                             >
-                                💵 Efectivo
+                                <span>💵</span> Efectivo
                             </button>
                             <button
-                                className={formData.metodoPago === 'TRANSFERENCIA' ? 'active' : ''}
+                                className={`payment-btn ${formData.metodoPago === 'TRANSFERENCIA' ? 'active' : ''}`}
                                 onClick={() => setFormData({ ...formData, metodoPago: 'TRANSFERENCIA' })}
                             >
-                                📱 Transferencia
+                                <span>📱</span> Transferencia
                             </button>
                         </div>
 
-                        <label>Monto Total Cobrado ($)</label>
+                        <label style={{ display: 'block', marginBottom: '5px', color: '#64748b' }}>Monto Total Cobrado ($)</label>
                         <input
                             type="number"
                             name="montoCobrado"
                             value={formData.montoCobrado}
                             onChange={handleChange}
-                            placeholder="Ej: 400"
+                            placeholder="0.00"
                             className="big-input"
+                            autoFocus
                         />
-                        <p className="hint">
-                            {formData.metodoPago === 'EFECTIVO'
-                                ? '⚠️ Este dinero se descontará de tu saldo.'
-                                : '✅ Este dinero entra directo a la empresa.'}
-                        </p>
-                        <div className="wizard-actions">
-                            <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-                            <button className="btn-primary" onClick={() => setStep(2)}>Siguiente ➡</button>
+
+                        {/* ALERTA INTELIGENTE */}
+                        <div className={`finance-alert ${esEfectivo ? 'warning' : 'success'}`}>
+                            <span>{esEfectivo ? '📉' : '📈'}</span>
+                            <p style={{ margin: 0 }}>{mensajeFinanciero}</p>
                         </div>
+
+                        {formData.metodoPago === 'TRANSFERENCIA' && (
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '10px', fontStyle: 'italic' }}>
+                                * Recuerda pedir al cliente el comprobante y enviarlo por WhatsApp al grupo de administración.
+                            </p>
+                        )}
                     </div>
                 )}
 
@@ -121,13 +132,14 @@ function CierreCasoModal({ caso, onClose, onCaseClosed }) {
                 {step === 2 && (
                     <div className="wizard-step">
                         <h4>🚦 Calificación del Cliente</h4>
-                        {/* ... Botones semáforo ... */}
+                        <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1rem' }}>Ayuda a otros técnicos a saber cómo es este cliente.</p>
+
                         <div className="semaforo-grid">
                             <button
                                 className={`semaforo-btn green ${formData.tipoCliente === 'AMABLE' ? 'selected' : ''}`}
                                 onClick={() => handleClienteType('AMABLE')}
                             >
-                                🟢<br />Amable / Normal
+                                🟢<br />Amable
                             </button>
                             <button
                                 className={`semaforo-btn orange ${formData.tipoCliente === 'EXIGENTE' ? 'selected' : ''}`}
@@ -142,49 +154,57 @@ function CierreCasoModal({ caso, onClose, onCaseClosed }) {
                                 🔴<br />Conflictivo
                             </button>
                         </div>
-                        <div className="wizard-actions">
-                            <button className="btn-secondary" onClick={() => setStep(1)}>⬅ Atrás</button>
-                            <button className="btn-primary" onClick={() => setStep(3)}>Siguiente ➡</button>
-                        </div>
                     </div>
                 )}
 
                 {/* PASO 3: CIERRE */}
                 {step === 3 && (
                     <div className="wizard-step">
-                        {/* ... inputs finales ... */}
                         <h4>📝 Notas Finales</h4>
 
-                        <div className="switch-container">
-                            <label>¿Requiere Cotización Formal?</label>
+                        <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#f8fafc', borderRadius: '8px' }}>
                             <input
                                 type="checkbox"
                                 name="requiereCotizacion"
                                 checked={formData.requiereCotizacion}
                                 onChange={handleChange}
+                                style={{ width: '20px', height: '20px' }}
                             />
+                            <label>¿Requiere Cotización Formal?</label>
                         </div>
 
-                        <label>Notas de Cierre (Opcional)</label>
+                        <label style={{ display: 'block', marginBottom: '5px' }}>Observaciones Técnicas</label>
                         <textarea
                             name="notasCierre"
                             value={formData.notasCierre}
                             onChange={handleChange}
-                            placeholder="Ej: Se requiere cambiar cableado en próxima visita..."
-                            rows={3}
+                            placeholder="Detalles del servicio, recomendaciones dadas, etc."
+                            rows={4}
+                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
                         />
-
-                        <div className="wizard-actions">
-                            <button className="btn-secondary" onClick={() => setStep(2)}>⬅ Atrás</button>
-                            <button className="btn-success" onClick={handleSubmit} disabled={loading}>
-                                {loading ? 'Cerrando...' : '✅ Finalizar Caso'}
-                            </button>
-                        </div>
                     </div>
                 )}
+
+                {/* ACCIONES DEL WIZARD */}
+                <div className="wizard-actions">
+                    {step > 1 ? (
+                        <button className="btn-secondary" onClick={() => setStep(step - 1)}>⬅ Atrás</button>
+                    ) : (
+                        <button className="btn-secondary" onClick={onClose}>Cancelar</button>
+                    )}
+
+                    {step < 3 ? (
+                        <button className="btn-primary" onClick={() => setStep(step + 1)}>Siguiente ➡</button>
+                    ) : (
+                        <button className="btn-success" onClick={handleSubmit} disabled={loading}>
+                            {loading ? 'Cerrando...' : '✅ Finalizar Caso'}
+                        </button>
+                    )}
+                </div>
+
             </div>
         </div>,
-        document.body // <--- 2. ESTO ASEGURA QUE SE RENDERICE EN EL BODY
+        document.body
     );
 }
 

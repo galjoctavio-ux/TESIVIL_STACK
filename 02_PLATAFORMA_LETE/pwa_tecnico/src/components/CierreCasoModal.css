@@ -1,128 +1,188 @@
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.6);
+.wizard-container {
+    padding: 0;
     display: flex;
-    justify-content: center;
-    align-items: flex-end;
-    /* Mobile bottom sheet style */
-    z-index: 9999;
+    flex-direction: column;
+    height: 90vh;
+    /* Casi pantalla completa */
+    max-height: 700px;
 }
 
-.modal-content.wizard-container {
-    background: white;
-    width: 100%;
-    max-width: 500px;
-    border-radius: 20px 20px 0 0;
-    padding: 20px;
-    animation: slideUp 0.3s ease;
+.wizard-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #f1f5f9;
+    background: #fff;
+    text-align: center;
 }
 
-@keyframes slideUp {
-    from {
-        transform: translateY(100%);
-    }
-
-    to {
-        transform: translateY(0);
-    }
+.wizard-header h3 {
+    margin: 0;
+    color: #1e293b;
 }
 
+.step-indicator {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    display: block;
+    margin-top: 5px;
+}
+
+.wizard-step {
+    padding: 1.5rem;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.wizard-step h4 {
+    color: #334155;
+    margin-bottom: 1.2rem;
+    font-size: 1.1rem;
+}
+
+/* --- TOGGLE PAGO --- */
 .payment-toggle {
     display: flex;
     gap: 10px;
-    margin-bottom: 20px;
+    margin-bottom: 1.5rem;
 }
 
-.payment-toggle button {
+.payment-btn {
     flex: 1;
-    padding: 15px;
-    border: 2px solid #ddd;
-    background: transparent;
-    border-radius: 10px;
-    font-weight: bold;
+    padding: 1rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    background: white;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
 }
 
-.payment-toggle button.active {
-    border-color: #007bff;
-    color: #007bff;
-    background: #f0f8ff;
+.payment-btn.active {
+    border-color: #3b82f6;
+    background-color: #eff6ff;
+    color: #1d4ed8;
 }
 
+.payment-btn span {
+    font-size: 1.5rem;
+}
+
+/* --- INPUT GIGANTE --- */
 .big-input {
+    font-size: 2rem;
+    padding: 1rem;
     width: 100%;
-    font-size: 24px;
-    padding: 10px;
     text-align: center;
-    border: 1px solid #ccc;
-    border-radius: 10px;
+    border: 2px solid #cbd5e1;
+    border-radius: 12px;
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+    color: #0f172a;
 }
 
+.big-input:focus {
+    border-color: #3b82f6;
+    outline: none;
+}
+
+/* --- ALERTAS --- */
+.finance-alert {
+    padding: 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    margin-top: 1rem;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.finance-alert.warning {
+    background: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+}
+
+.finance-alert.success {
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+
+/* --- SEMÁFORO --- */
 .semaforo-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 10px;
-    margin: 20px 0;
+    margin-bottom: 2rem;
 }
 
 .semaforo-btn {
-    padding: 15px 5px;
-    border: 2px solid #eee;
-    background: white;
-    border-radius: 10px;
-    font-size: 0.9em;
+    padding: 1rem;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    background: #f8fafc;
     cursor: pointer;
+    font-size: 0.9rem;
+    color: #64748b;
 }
 
-.semaforo-btn.green.selected {
-    background: #e8f5e9;
-    border-color: #4caf50;
-}
-
-.semaforo-btn.orange.selected {
-    background: #fff3e0;
-    border-color: #ff9800;
-}
-
-.semaforo-btn.red.selected {
-    background: #ffebee;
-    border-color: #f44336;
-}
-
-.wizard-actions {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 25px;
-    gap: 15px;
-}
-
-.btn-primary {
-    background: #007bff;
-    color: white;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 8px;
-    flex: 1;
+.semaforo-btn.selected {
+    border-color: currentColor;
     font-weight: bold;
+    background: white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.semaforo-btn.green {
+    color: #22c55e;
+}
+
+.semaforo-btn.orange {
+    color: #f59e0b;
+}
+
+.semaforo-btn.red {
+    color: #ef4444;
+}
+
+/* --- BOTONES ACCIÓN --- */
+.wizard-actions {
+    padding: 1.5rem;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    gap: 10px;
+    background: #fff;
 }
 
 .btn-secondary {
-    background: #e0e0e0;
-    color: #333;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 8px;
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.btn-primary {
+    background: #3b82f6;
+    color: white;
 }
 
 .btn-success {
-    background: #28a745;
+    background: #22c55e;
     color: white;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 8px;
+}
+
+.wizard-actions button {
     flex: 1;
-    font-weight: bold;
+    padding: 1rem;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.wizard-actions button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
 }

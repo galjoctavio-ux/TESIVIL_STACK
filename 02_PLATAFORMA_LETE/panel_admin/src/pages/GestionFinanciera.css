@@ -1,0 +1,214 @@
+.finanzas-container {
+    padding: 2rem;
+    background: #f4f6f9;
+    min-height: 90vh;
+}
+
+.finanzas-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.finanzas-header h1 {
+    margin: 0;
+    color: #2c3e50;
+}
+
+.tabs {
+    display: flex;
+    gap: 10px;
+}
+
+.tabs button {
+    padding: 10px 20px;
+    border: none;
+    background: #e2e8f0;
+    color: #64748b;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.tabs button.active {
+    background: #3b82f6;
+    color: white;
+}
+
+/* Grid Pendientes */
+.grid-pendientes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.card-pendiente {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.cp-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: #475569;
+}
+
+.cp-body h3 {
+    font-size: 2rem;
+    margin: 10px 0;
+    color: #0f172a;
+}
+
+.link-comprobante {
+    display: block;
+    margin-top: 10px;
+    color: #3b82f6;
+    text-decoration: underline;
+}
+
+.cp-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.btn-approve {
+    flex: 1;
+    background: #22c55e;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn-reject {
+    flex: 1;
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* Tabla Saldos */
+.tabla-saldos {
+    width: 100%;
+    background: white;
+    border-radius: 12px;
+    border-collapse: collapse;
+    overflow: hidden;
+}
+
+.tabla-saldos th {
+    background: #f1f5f9;
+    padding: 15px;
+    text-align: left;
+    color: #475569;
+}
+
+.tabla-saldos td {
+    padding: 15px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.badge-saldo {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.badge-saldo.deudor {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+/* Rojo */
+.badge-saldo.acreedor {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+/* Verde */
+
+.btn-icon,
+.btn-icon-bonus {
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    cursor: pointer;
+    margin-right: 5px;
+    font-size: 1.2rem;
+}
+
+.btn-icon:hover {
+    background: #f8fafc;
+}
+
+.btn-icon-bonus {
+    border-color: #f59e0b;
+    background: #fffbeb;
+}
+
+/* Estilos Modales */
+.modal-bono,
+.modal-historial {
+    padding: 1rem;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+}
+
+.btn-primary-full {
+    width: 100%;
+    background: #3b82f6;
+    color: white;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.historial-scroll {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-top: 1rem;
+}
+
+.tabla-mini {
+    width: 100%;
+    font-size: 0.9rem;
+}
+
+.tabla-mini td.neg {
+    color: #ef4444;
+    font-weight: bold;
+}
+
+.tabla-mini td.pos {
+    color: #16a34a;
+    font-weight: bold;
+}

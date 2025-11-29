@@ -85,6 +85,14 @@ function Dashboard() {
           </Link>
 
           <Link
+            to="/finanzas-gestion"
+            className="main-button"
+            style={{ background: '#2c3e50', color: 'white', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '200px' }}
+          >
+            🏦 Autorizar Pagos y Bonos
+          </Link>
+
+          <Link
             to="/configuracion"
             style={{ display: 'flex', alignItems: 'center', padding: '10px', background: '#333', color: 'white', borderRadius: '5px', textDecoration: 'none' }}
           >
