@@ -79,9 +79,6 @@ const menuOptionStyles = {
   transition: 'background-color 0.2s',
 };
 
-// Estilo hover simulado (en JS puro con styles es difícil el hover, pero esto es base)
-// Si usas CSS o Tailwind sería className="hover:bg-gray-100"
-
 const logoutButtonStyles = {
   width: '100%',
   padding: '12px',
@@ -98,6 +95,7 @@ const logoutButtonStyles = {
 const SideMenu = ({ isOpen, onClose, user, logout, onOpenAvailability }) => {
 
   const navigate = useNavigate();
+
   const handleSubscribe = async () => {
     // 1. Verificación básica de soporte
     if (!('serviceWorker' in navigator)) {
@@ -114,31 +112,23 @@ const SideMenu = ({ isOpen, onClose, user, logout, onOpenAvailability }) => {
     const publicVapidKey = 'BPEC0_c6aUq8Bx67_55xzk9l9q1HCzwE4hwuKshnlTOrdRqUZbjkCFNBg7NWDo--bvKynoC8qkmjVHe30uj_UE4';
 
     try {
-      // 2. Esperar a que el SW esté activo
       const register = await navigator.serviceWorker.ready;
+      if (!register) throw new Error('Service Worker no está listo.');
 
-      if (!register) {
-        throw new Error('Service Worker no está listo.');
-      }
-
-      // 3. Verificar estado actual de permisos
       if (Notification.permission === 'denied') {
-        throw new Error('Permiso denegado. Debes habilitar las notificaciones en la configuración de Android/iOS para esta App.');
+        throw new Error('Permiso denegado. Habilita notificaciones en configuración.');
       }
 
-      // 4. Intentar suscribirse
       const subscription = await register.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
       });
 
-      // 5. Enviar al backend
       await apiService.post('/agenda/subscribe', { subscription });
       alert('¡Notificaciones activadas con éxito! 🔔');
 
     } catch (error) {
       console.error(error);
-      // ESTO ES LO IMPORTANTE: Mostrar el error real en el celular
       alert(`Error Técnico: ${error.message || error.name}`);
     }
   };
@@ -181,12 +171,30 @@ const SideMenu = ({ isOpen, onClose, user, logout, onOpenAvailability }) => {
             </div>
           </button>
 
+          {/* --- NUEVO BOTÓN: MI BILLETERA --- */}
+          <button
+            style={menuOptionStyles}
+            onClick={() => {
+              onClose();
+              navigate('/billetera');
+            }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = '#f8fafc'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+          >
+            <span style={{ fontSize: '1.2rem' }}>💼</span>
+            <div>
+              <span style={{ display: 'block', fontWeight: '500' }}>Mi Billetera</span>
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Saldo y reportes de pago</span>
+            </div>
+          </button>
+          {/* ---------------------------------- */}
+
           {/* Botón: Mi Firma */}
           <button
             style={menuOptionStyles}
             onClick={() => {
               onClose();
-              navigate('/firma'); // El router sabrá que es /lete/app/firma
+              navigate('/firma');
             }}
             onMouseEnter={(e) => e.target.style.backgroundColor = '#f8fafc'}
             onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
@@ -198,7 +206,7 @@ const SideMenu = ({ isOpen, onClose, user, logout, onOpenAvailability }) => {
             </div>
           </button>
 
-          {/* NUEVO BOTÓN: NOTIFICACIONES */}
+          {/* Botón: Notificaciones */}
           <button
             style={menuOptionStyles}
             onClick={handleSubscribe}

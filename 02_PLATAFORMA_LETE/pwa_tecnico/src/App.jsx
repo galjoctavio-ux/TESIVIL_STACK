@@ -8,6 +8,7 @@ import RevisionWizard from './pages/RevisionWizard';
 import Cotizador from './pages/Cotizador';
 import FirmaPage from './pages/FirmaPage';
 import DetalleCaso from './pages/DetalleCaso';
+import MiBilletera from './pages/MiBilletera';
 
 function App() {
   return (
@@ -62,6 +63,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/billetera" element={<ProtectedRoute><MiBilletera /></ProtectedRoute>} />
 
         {/* La ruta antigua "/revision/:casoId" ya no es necesaria */}
 
