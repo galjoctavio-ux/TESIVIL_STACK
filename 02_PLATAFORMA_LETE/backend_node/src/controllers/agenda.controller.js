@@ -122,6 +122,7 @@ export const getAgendaPorDia = async (req, res) => {
 
     // --- AQUÍ ESTÁ LA CORRECCIÓN CLAVE ---
     // Usamos la relación para traer los datos del cliente desde la tabla 'clientes'
+    // --- CAMBIO AQUÍ: Agregamos 'telefono' y 'celular' al select ---
     const { data: casosData, error: casosError } = await supabaseAdmin
       .from('casos')
       .select(`
@@ -131,7 +132,9 @@ export const getAgendaPorDia = async (req, res) => {
         cliente:clientes (
           nombre_completo, 
           direccion_principal,
-          google_maps_link
+          google_maps_link,
+          telefono,
+          celular
         )
       `)
       .in('id', casoIds);
