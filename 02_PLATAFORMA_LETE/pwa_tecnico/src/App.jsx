@@ -9,6 +9,7 @@ import Cotizador from './pages/Cotizador';
 import FirmaPage from './pages/FirmaPage';
 import DetalleCaso from './pages/DetalleCaso';
 import MiBilletera from './pages/MiBilletera';
+import ChatSoporte from './pages/ChatSoporte';
 
 function App() {
   return (
@@ -63,6 +64,12 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/soporte" element={
+          <ProtectedRoute>
+            <ChatSoporte />
+          </ProtectedRoute>
+        } />
 
         <Route path="/billetera" element={<ProtectedRoute><MiBilletera /></ProtectedRoute>} />
 

@@ -206,6 +206,23 @@ const SideMenu = ({ isOpen, onClose, user, logout, onOpenAvailability }) => {
             </div>
           </button>
 
+          {/* --- NUEVO BOTÓN: SOPORTE TÉCNICO --- */}
+          <button
+            style={menuOptionStyles}
+            onClick={() => {
+              onClose();
+              navigate('/soporte');
+            }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = '#f8fafc'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+          >
+            <span style={{ fontSize: '1.2rem' }}>👷</span>
+            <div>
+              <span style={{ display: 'block', fontWeight: '500' }}>Soporte WhatsApp</span>
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Chat con administración</span>
+            </div>
+          </button>
+
           {/* Botón: Notificaciones */}
           <button
             style={menuOptionStyles}
