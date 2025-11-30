@@ -169,6 +169,15 @@ const ChatSoporte = () => {
                         TOMAR CASO
                     </button>
                 )}
+                {/* Botón CERRAR (Solo si ya lo tengo yo asignado) */}
+                {selectedChat.assigned_to_role === 'TECH' && (
+                    <button
+                        onClick={() => handleStatusChange('CLOSED', 'ADMIN')}
+                        className="bg-gray-200 text-gray-700 text-xs px-2 py-1.5 rounded font-bold border border-gray-300"
+                    >
+                        FINALIZAR
+                    </button>
+                )}
             </div>
 
             {/* Mensajes */}
