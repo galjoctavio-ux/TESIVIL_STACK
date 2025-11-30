@@ -55,6 +55,13 @@ function App() {
           }
         />
 
+        {/* 2. AGREGAR LA RUTA DE SOPORTE */}
+        <Route path="/soporte" element={
+          <ProtectedRoute>
+            <ChatSoporte />
+          </ProtectedRoute>
+        } />
+
         {/* --- 3. NUEVA RUTA PROTEGIDA: FIRMA --- */}
         <Route
           path="/firma"

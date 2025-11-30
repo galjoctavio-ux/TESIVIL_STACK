@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom'; // <--- 1. IMPORTAR useNavigate
+import axios from 'axios'; // <--- 2. IMPORTAR axios
 import dayjs from 'dayjs';
 import { getAgendaPorDia } from '../apiService';
 import CierreCasoModal from './CierreCasoModal';
 
 // Altura aumentada para dar espacio
 const HOUR_HEIGHT = 140;
+
+// URL DEL BACKEND NUEVO (Node.js)
+const CRM_API = 'https://api.tesivil.com/api';
 
 const timelineContainerStyles = {
   position: 'relative',
@@ -41,14 +45,15 @@ const timeLabelStyles = {
 
 const actionsGridStyles = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(5, 1fr)', // <--- CAMBIO: 5 Columnas para que quepan todos
-  gap: '4px', // Gap reducido para que entren en móvil
+  gridTemplateColumns: 'repeat(6, 1fr)', // <--- 3. CAMBIO: 6 Columnas ahora
+  gap: '4px',
   marginTop: 'auto',
   paddingTop: '8px',
   borderTop: '1px solid rgba(0,0,0,0.05)'
 };
 
 const DiaTimeline = ({ date }) => {
+  const navigate = useNavigate(); // Hook de navegación
   const [citas, setCitas] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [casoParaCerrar, setCasoParaCerrar] = useState(null);
@@ -109,9 +114,37 @@ const DiaTimeline = ({ date }) => {
       alert("No hay dirección registrada para este cliente.");
       return;
     }
-    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccion)}`;
+    const url = `https://www.google.com/maps/search/?api=1&query=$?q=${encodeURIComponent(direccion)}`;
     window.open(url, "_blank");
   };
+
+  // --- 4. NUEVA FUNCIÓN: ABRIR CHAT WHATSAPP ---
+  const handleOpenChat = async (caso) => {
+    // Intentamos sacar el teléfono de donde esté disponible
+    const telefono = caso.cliente?.telefono || caso.cliente_telefono || caso.telefono;
+    const nombre = caso.cliente?.nombre_completo || caso.cliente_nombre || 'Cliente';
+
+    if (!telefono) {
+      alert("Este caso no tiene un teléfono registrado para chatear.");
+      return;
+    }
+
+    try {
+      // Pedimos al CRM Nuevo que nos de el chat ID
+      const res = await axios.post(`${CRM_API}/conversations/init`, {
+        phone: telefono,
+        name: nombre
+      });
+
+      // Redirigimos a la pantalla de Soporte con el chat precargado
+      navigate('/soporte', { state: { autoSelectChat: res.data } });
+
+    } catch (error) {
+      console.error('Error abriendo chat:', error);
+      alert("No se pudo iniciar el chat. Verifica tu conexión.");
+    }
+  };
+  // ---------------------------------------------
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
@@ -167,7 +200,17 @@ const DiaTimeline = ({ date }) => {
                     </div>
 
                     <div className="cita-actions" style={actionsGridStyles}>
-                      {/* 1. MAPA */}
+                      {/* 1. WHATSAPP (NUEVO) - Lo pongo primero por relevancia */}
+                      <button
+                        className="cita-icon-button"
+                        onClick={() => handleOpenChat(cita.caso)}
+                        title="Chat WhatsApp"
+                        style={{ width: '100%', backgroundColor: '#dcfce7', borderColor: '#22c55e' }}
+                      >
+                        💬
+                      </button>
+
+                      {/* 2. MAPA */}
                       <button
                         className="cita-icon-button"
                         onClick={() => handleOpenMaps(cita.caso)}
@@ -177,7 +220,7 @@ const DiaTimeline = ({ date }) => {
                         📍
                       </button>
 
-                      {/* 2. DETALLES */}
+                      {/* 3. DETALLES */}
                       <Link
                         to={`/detalle-caso/${cita.caso.id}`}
                         className="cita-icon-button"
@@ -187,7 +230,7 @@ const DiaTimeline = ({ date }) => {
                         ℹ️
                       </Link>
 
-                      {/* 3. REVISIÓN */}
+                      {/* 4. REVISIÓN */}
                       {(cita.caso.tipo !== 'levantamiento' && isCasoActivo) ? (
                         <Link
                           to={`/revision/${cita.caso.id}`}
@@ -199,7 +242,7 @@ const DiaTimeline = ({ date }) => {
                         </Link>
                       ) : (<div />)}
 
-                      {/* 4. COTIZAR (EL RAYITO REGRESA) */}
+                      {/* 5. COTIZAR */}
                       {(isCasoActivo || cita.caso.tipo === 'alto_consumo') ? (
                         <Link
                           to="/cotizador"
@@ -216,7 +259,7 @@ const DiaTimeline = ({ date }) => {
                         </Link>
                       ) : (<div />)}
 
-                      {/* 5. COBRAR */}
+                      {/* 6. COBRAR */}
                       {isCasoActivo ? (
                         <button
                           className="cita-icon-button"

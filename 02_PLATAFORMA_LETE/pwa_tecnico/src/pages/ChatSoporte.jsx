@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Send, User, Bot, Smartphone, HardHat, StickyNote, CheckCircle, ArrowLeft } from 'lucide-react';
-// Si usas un Router como react-router-dom, usa esto para el botón de regresar
-import { useNavigate } from 'react-router-dom';
+import { Send, User, HardHat, StickyNote, ArrowLeft } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
-// IMPORTANTE: Aquí apuntamos a la IP de la OTRA máquina (VM NUEVA)
+// URL SEGURA de tu Backend Nuevo
 const API_URL = 'https://api.tesivil.com/api';
 
 const api = axios.create({ baseURL: API_URL });
 
 const ChatSoporte = () => {
-    const navigate = useNavigate(); // Hook para navegación
+    const navigate = useNavigate();
+    const location = useLocation(); // Para recibir datos de la Agenda
+
     const [conversations, setConversations] = useState([]);
     const [selectedChat, setSelectedChat] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -19,12 +20,20 @@ const ChatSoporte = () => {
 
     const messagesEndRef = useRef(null);
 
-    // 1. Cargar Chats (Solo los de la bolsa de técnicos o asignados a técnicos)
+    // 1. EFECTO: AUTO-SELECCIONAR CHAT SI VIENE DE LA AGENDA
+    useEffect(() => {
+        if (location.state && location.state.autoSelectChat) {
+            const targetChat = location.state.autoSelectChat;
+            setSelectedChat(targetChat);
+            // Limpiamos el estado para que no se quede pegado si recarga
+            window.history.replaceState({}, document.title);
+        }
+    }, [location]);
+
+    // 2. Cargar Lista de Chats (Solo TECH_POOL o ASIGNADOS a mí)
     const fetchConversations = async () => {
         try {
             const res = await api.get('/conversations');
-            // Filtramos en el cliente para mostrar solo lo relevante al técnico
-            // (TECH_POOL = Bolsa de trabajo, TECH = Asignado a mí/colega)
             const techChats = res.data.filter(c => c.status === 'TECH_POOL' || c.assigned_to_role === 'TECH');
             setConversations(techChats);
         } catch (error) {
@@ -38,7 +47,7 @@ const ChatSoporte = () => {
         return () => clearInterval(interval);
     }, []);
 
-    // 2. Cargar Mensajes
+    // 3. Cargar Mensajes del chat seleccionado
     useEffect(() => {
         if (!selectedChat) return;
         const fetchMessages = async () => {
@@ -57,7 +66,7 @@ const ChatSoporte = () => {
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     };
 
-    // 3. Enviar Mensaje
+    // 4. Acciones (Enviar y Cambiar Estado)
     const handleSend = async (e) => {
         e.preventDefault();
         if (!inputText.trim() || !selectedChat) return;
@@ -65,7 +74,7 @@ const ChatSoporte = () => {
         setInputText('');
 
         try {
-            // Si el chat estaba en POOL, al responder me lo asigno automáticamente
+            // Auto-asignar si respondo a un ticket de la bolsa
             if (selectedChat.status === 'TECH_POOL' && !isInternal) {
                 await handleStatusChange('OPEN', 'TECH');
             }
@@ -75,13 +84,12 @@ const ChatSoporte = () => {
                 is_internal: isInternal
             });
 
-            // Recargar mensajes
             const res = await api.get(`/conversations/${selectedChat.id}/messages`);
             setMessages(res.data);
             scrollToBottom();
             setIsInternal(false);
         } catch (error) {
-            alert("Error enviando mensaje (Revisa conexión)");
+            alert("Error enviando mensaje. Verifica tu conexión.");
             setInputText(tempContent);
         }
     };
@@ -94,15 +102,20 @@ const ChatSoporte = () => {
                 assigned_to_role: newRole
             });
             fetchConversations();
+            // Actualizamos visualmente el chat seleccionado
             setSelectedChat(prev => ({ ...prev, status: newStatus, assigned_to_role: newRole }));
+
+            // Si cerramos, nos salimos a la lista
+            if (newStatus === 'CLOSED') {
+                setSelectedChat(null);
+            }
         } catch (e) { console.error(e); }
     };
 
-    // --- VISTA MÓVIL: LISTA DE CHATS ---
+    // --- RENDER: LISTA DE CHATS ---
     if (!selectedChat) {
         return (
-            <div className="flex flex-col h-screen bg-gray-50 pb-20"> {/* pb-20 para dejar espacio al menu inferior si existe */}
-                {/* Header */}
+            <div className="flex flex-col h-screen bg-gray-50 pb-20">
                 <div className="bg-white p-4 shadow-sm flex items-center gap-3 sticky top-0 z-10">
                     <button onClick={() => navigate(-1)} className="p-2">
                         <ArrowLeft className="text-gray-600" />
@@ -110,7 +123,6 @@ const ChatSoporte = () => {
                     <h1 className="font-bold text-lg text-gray-800">Soporte Técnico</h1>
                 </div>
 
-                {/* Lista */}
                 <div className="flex-1 overflow-y-auto p-2">
                     {conversations.length === 0 ? (
                         <div className="text-center mt-10 text-gray-400">
@@ -125,12 +137,12 @@ const ChatSoporte = () => {
                                 className="bg-white p-4 rounded-lg shadow-sm mb-3 border-l-4 border-l-blue-500 active:bg-gray-100"
                             >
                                 <div className="flex justify-between items-start mb-2">
-                                    <h3 className="font-bold text-gray-800">{chat.client_name || 'Cliente WhatsApp'}</h3>
+                                    <h3 className="font-bold text-gray-800">{chat.client_name || 'Cliente'}</h3>
                                     {chat.unread_count > 0 && <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">{chat.unread_count}</span>}
                                 </div>
                                 <div className="flex gap-2 mb-1">
                                     {chat.status === 'TECH_POOL' && <span className="bg-orange-100 text-orange-800 text-xs px-2 py-0.5 rounded font-bold">POR ASIGNAR</span>}
-                                    {chat.assigned_to_role === 'TECH' && <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded flex items-center gap-1"><HardHat size={10} /> ASIGNADO</span>}
+                                    {chat.assigned_to_role === 'TECH' && <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded flex items-center gap-1"><HardHat size={10} /> ASIGNADO A MÍ</span>}
                                 </div>
                                 <p className="text-xs text-gray-400 text-right">
                                     {new Date(chat.last_interaction).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -143,56 +155,53 @@ const ChatSoporte = () => {
         );
     }
 
-    // --- VISTA MÓVIL: CHAT ABIERTO ---
+    // --- RENDER: CHAT INDIVIDUAL ---
     return (
         <div className="flex flex-col h-screen bg-[#e5ddd5] pb-0">
-            {/* Header Chat */}
+            {/* Header */}
             <div className="bg-white p-3 shadow-sm flex items-center justify-between sticky top-0 z-10">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     <button onClick={() => setSelectedChat(null)} className="p-1">
                         <ArrowLeft className="text-gray-600" />
                     </button>
-                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                        <User size={16} />
-                    </div>
                     <div>
                         <h2 className="font-bold text-sm text-gray-800 truncate w-32">{selectedChat.client_name}</h2>
-                        <p className="text-[10px] text-green-600">WhatsApp Web</p>
+                        <p className="text-[10px] text-green-600">En Línea</p>
                     </div>
                 </div>
 
-                {selectedChat.status === 'TECH_POOL' && (
-                    <button
-                        onClick={() => handleStatusChange('OPEN', 'TECH')}
-                        className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded font-bold shadow-sm animate-pulse"
-                    >
-                        TOMAR CASO
-                    </button>
-                )}
-                {/* Botón CERRAR (Solo si ya lo tengo yo asignado) */}
-                {selectedChat.assigned_to_role === 'TECH' && (
-                    <button
-                        onClick={() => handleStatusChange('CLOSED', 'ADMIN')}
-                        className="bg-gray-200 text-gray-700 text-xs px-2 py-1.5 rounded font-bold border border-gray-300"
-                    >
-                        FINALIZAR
-                    </button>
-                )}
+                <div className="flex gap-2">
+                    {selectedChat.status === 'TECH_POOL' && (
+                        <button
+                            onClick={() => handleStatusChange('OPEN', 'TECH')}
+                            className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded font-bold shadow-sm animate-pulse"
+                        >
+                            TOMAR
+                        </button>
+                    )}
+                    {/* Botón FINALIZAR (Solo aparece si NO es de la bolsa y NO es del bot) */}
+                    {selectedChat.status !== 'TECH_POOL' && selectedChat.assigned_to_role !== 'BOT' && (
+                        <button
+                            onClick={() => handleStatusChange('CLOSED', 'ADMIN')}
+                            className="bg-gray-200 text-gray-700 text-xs px-2 py-1.5 rounded font-bold border border-gray-300"
+                        >
+                            FINALIZAR
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {/* Mensajes */}
+            {/* Lista Mensajes */}
             <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-[#e5ddd5]">
                 {messages.map((msg) => {
                     const isClient = msg.sender_type === 'CLIENT';
                     const isInternalMsg = msg.is_internal;
-
                     return (
                         <div key={msg.id} className={`flex ${isClient ? 'justify-start' : 'justify-end'}`}>
                             <div className={`max-w-[85%] rounded-lg p-2 text-sm shadow-sm relative ${isInternalMsg ? 'bg-yellow-100 border border-yellow-300 text-gray-800' :
-                                isClient ? 'bg-white text-gray-900 rounded-tl-none' :
-                                    'bg-[#d9fdd3] text-gray-900 rounded-tr-none'
+                                    isClient ? 'bg-white text-gray-900 rounded-tl-none' :
+                                        'bg-[#d9fdd3] text-gray-900 rounded-tr-none'
                                 }`}>
-                                {/* Label pequeño */}
                                 {!isClient && (
                                     <p className="text-[9px] font-bold mb-1 opacity-60 flex gap-1 uppercase">
                                         {isInternalMsg ? <StickyNote size={9} /> : <HardHat size={9} />}
@@ -218,13 +227,13 @@ const ChatSoporte = () => {
                         className={`text-[10px] px-2 py-1 rounded-full font-bold border flex items-center gap-1 ${isInternal ? 'bg-yellow-200 border-yellow-400' : 'bg-white border-gray-300'}`}
                     >
                         {isInternal ? <StickyNote size={10} /> : <Send size={10} />}
-                        {isInternal ? 'MODO NOTA PRIVADA' : 'MODO PÚBLICO'}
+                        {isInternal ? 'NOTA PRIVADA' : 'PÚBLICO'}
                     </button>
                 </div>
                 <form onSubmit={handleSend} className="flex gap-2">
                     <input
                         className="flex-1 p-2 rounded-full border border-gray-300 focus:outline-none focus:border-blue-500 text-sm"
-                        placeholder={isInternal ? "Nota oculta..." : "Escribe al cliente..."}
+                        placeholder={isInternal ? "Nota interna..." : "Mensaje al cliente..."}
                         value={inputText}
                         onChange={e => setInputText(e.target.value)}
                     />
