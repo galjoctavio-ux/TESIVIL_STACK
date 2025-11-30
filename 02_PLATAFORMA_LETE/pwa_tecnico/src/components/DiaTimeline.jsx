@@ -120,12 +120,25 @@ const DiaTimeline = ({ date }) => {
 
   // --- 4. NUEVA FUNCIÓN: ABRIR CHAT WHATSAPP ---
   const handleOpenChat = async (caso) => {
-    // Intentamos sacar el teléfono de donde esté disponible
-    const telefono = caso.cliente?.telefono || caso.cliente_telefono || caso.telefono;
-    const nombre = caso.cliente?.nombre_completo || caso.cliente_nombre || 'Cliente';
+    // 1. DEBUG: Vamos a ver qué trae el objeto realmente en la consola del navegador
+    console.log("🔍 DATOS DEL CASO RECIBIDO:", caso);
+    console.log("👤 DATOS DEL CLIENTE:", caso.cliente);
 
+    // 2. Intentamos sacar el teléfono de TODAS las partes posibles
+    // A veces viene en caso.cliente.telefono, a veces en caso.cliente_telefono, a veces directo en caso.telefono
+    const telefono =
+      caso.cliente?.telefono ||
+      caso.cliente?.celular ||
+      caso.cliente_telefono ||
+      caso.telefono ||
+      caso.celular;
+
+    const nombre = caso.cliente?.nombre_completo || caso.cliente_nombre || caso.cliente?.nombre || 'Cliente';
+
+    // 3. Validación
     if (!telefono) {
-      alert("Este caso no tiene un teléfono registrado para chatear.");
+      // Si falla, muestra en la alerta qué datos sí llegaron para saber qué falta
+      alert(`Error: No encuentro el teléfono. \nDatos encontrados: ID Caso: ${caso.id}, Cliente: ${nombre}`);
       return;
     }
 
@@ -144,8 +157,6 @@ const DiaTimeline = ({ date }) => {
       alert("No se pudo iniciar el chat. Verifica tu conexión.");
     }
   };
-  // ---------------------------------------------
-
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   return (
