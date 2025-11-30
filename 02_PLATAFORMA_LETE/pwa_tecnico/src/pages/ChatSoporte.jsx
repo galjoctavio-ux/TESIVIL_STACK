@@ -5,7 +5,7 @@ import { Send, User, Bot, Smartphone, HardHat, StickyNote, CheckCircle, ArrowLef
 import { useNavigate } from 'react-router-dom';
 
 // IMPORTANTE: Aquí apuntamos a la IP de la OTRA máquina (VM NUEVA)
-const API_URL = 'http://13.59.28.73:3000/api';
+const API_URL = 'https://api.tesivil.com/api';
 
 const api = axios.create({ baseURL: API_URL });
 
@@ -180,8 +180,8 @@ const ChatSoporte = () => {
                     return (
                         <div key={msg.id} className={`flex ${isClient ? 'justify-start' : 'justify-end'}`}>
                             <div className={`max-w-[85%] rounded-lg p-2 text-sm shadow-sm relative ${isInternalMsg ? 'bg-yellow-100 border border-yellow-300 text-gray-800' :
-                                    isClient ? 'bg-white text-gray-900 rounded-tl-none' :
-                                        'bg-[#d9fdd3] text-gray-900 rounded-tr-none'
+                                isClient ? 'bg-white text-gray-900 rounded-tl-none' :
+                                    'bg-[#d9fdd3] text-gray-900 rounded-tr-none'
                                 }`}>
                                 {/* Label pequeño */}
                                 {!isClient && (
