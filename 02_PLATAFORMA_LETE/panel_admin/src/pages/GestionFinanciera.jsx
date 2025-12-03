@@ -1,22 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import api from '../apiService';
 import Modal from '../components/Modal'; // Tu componente modal genérico
-import './GestionFinanciera.css'; // Lo crearemos abajo
+import './GestionFinanciera.css';
 
 const GestionFinanciera = () => {
     const [activeTab, setActiveTab] = useState('pendientes');
     const [pendientes, setPendientes] = useState([]);
-    const [tecnicos, setTecnicos] = useState([]); // Lista de técnicos con saldos
+    const [tecnicos, setTecnicos] = useState([]);
     const [loading, setLoading] = useState(true);
 
     // Estado para Modales
     const [bonoModalOpen, setBonoModalOpen] = useState(false);
+    const [depositoModalOpen, setDepositoModalOpen] = useState(false); // NUEVO
     const [selectedTecnico, setSelectedTecnico] = useState(null);
     const [historialModalOpen, setHistorialModalOpen] = useState(false);
     const [historial, setHistorial] = useState([]);
 
     // Datos formulario Bono
     const [bonoData, setBonoData] = useState({ monto: 100, motivo: 'Felicitación Cliente (WhatsApp)', casoId: '' });
+
+    // Datos formulario Depósito (NUEVO)
+    const [depositoData, setDepositoData] = useState({ monto: '', referencia: '', metodo: 'Transferencia' });
 
     useEffect(() => {
         cargarDatos();
@@ -25,17 +29,9 @@ const GestionFinanciera = () => {
     const cargarDatos = async () => {
         setLoading(true);
         try {
-            // 1. Obtener Transacciones Pendientes (Globales)
-            // Necesitamos un endpoint nuevo o filtrar en cliente. 
-            // Para este ejemplo, asumiremos que traemos todo y filtramos en cliente o creas un endpoint específico
-            // NOTA: Para hacerlo rápido, usaremos la lógica de listar técnicos y dentro sus pendientes, 
-            // pero lo ideal es un endpoint '/finanzas/pendientes'.
-
-            // Simulamos llamada a API de técnicos (usamos tu endpoint existente de usuarios y luego pedimos sus finanzas)
+            // Simulamos llamada a API de técnicos
             const { data: users } = await api.get('/usuarios?rol=tecnico');
 
-            // Calcular saldos y buscar pendientes (Esto es pesado, idealmente el backend lo hace)
-            // Por simplicidad del MVP, iteramos:
             const techsWithFinance = await Promise.all(users.map(async (t) => {
                 const res = await api.get(`/finanzas/resumen/${t.id}`);
                 return {
@@ -47,7 +43,6 @@ const GestionFinanciera = () => {
 
             setTecnicos(techsWithFinance);
 
-            // Aplanar lista de pendientes para la pestaña 1
             const todosPendientes = techsWithFinance.flatMap(t =>
                 t.pendientes.map(p => ({ ...p, tecnicoNombre: t.nombre }))
             );
@@ -64,12 +59,13 @@ const GestionFinanciera = () => {
         if (!window.confirm(`¿Estás seguro de ${accion} este pago?`)) return;
         try {
             await api.put(`/finanzas/aprobar/${id}`, { accion });
-            cargarDatos(); // Recargar todo
+            cargarDatos();
         } catch (error) {
             alert('Error al procesar');
         }
     };
 
+    // --- LÓGICA BONOS ---
     const openBonoModal = (tech) => {
         setSelectedTecnico(tech);
         setBonoData({ monto: 100, motivo: 'Felicitación Cliente (WhatsApp)', casoId: '' });
@@ -89,6 +85,34 @@ const GestionFinanciera = () => {
             cargarDatos();
         } catch (error) {
             alert('Error enviando bono');
+        }
+    };
+
+    // --- LÓGICA DEPÓSITOS (NUEVO) ---
+    const openDepositoModal = (tech) => {
+        setSelectedTecnico(tech);
+        setDepositoData({ monto: '', referencia: '', metodo: 'Transferencia' });
+        setDepositoModalOpen(true);
+    };
+
+    const enviarDeposito = async (e) => {
+        e.preventDefault();
+        if (!depositoData.monto || !depositoData.referencia) return alert("Faltan datos");
+
+        try {
+            // Este endpoint lo crearemos en el backend en el siguiente paso
+            await api.post('/finanzas/deposito-admin', {
+                tecnicoId: selectedTecnico.id,
+                monto: parseFloat(depositoData.monto),
+                referencia: depositoData.referencia,
+                metodo: depositoData.metodo
+            });
+            alert(`✅ Depósito registrado a ${selectedTecnico.nombre}`);
+            setDepositoModalOpen(false);
+            cargarDatos();
+        } catch (error) {
+            console.error(error);
+            alert('Error al registrar el depósito. Verifica la conexión.');
         }
     };
 
@@ -174,8 +198,19 @@ const GestionFinanciera = () => {
                                         </span>
                                     </td>
                                     <td>
-                                        <button className="btn-icon" onClick={() => verHistorial(tech)} title="Ver Movimientos">📜</button>
-                                        <button className="btn-icon-bonus" onClick={() => openBonoModal(tech)} title="Dar Bono">🎁</button>
+                                        <div style={{ display: 'flex', gap: '5px' }}>
+                                            <button className="btn-icon" onClick={() => verHistorial(tech)} title="Ver Movimientos">📜</button>
+                                            <button className="btn-icon-bonus" onClick={() => openBonoModal(tech)} title="Dar Bono">🎁</button>
+                                            {/* Nuevo Botón de Depósito */}
+                                            <button
+                                                className="btn-icon"
+                                                style={{ backgroundColor: '#10b981', color: 'white', border: 'none' }}
+                                                onClick={() => openDepositoModal(tech)}
+                                                title="Realizar Depósito (Caja Chica/Material)"
+                                            >
+                                                💰
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -210,7 +245,7 @@ const GestionFinanciera = () => {
                         />
                     </div>
                     <div className="form-group">
-                        <label>ID Caso (Opcional - Para referencia)</label>
+                        <label>ID Caso (Opcional)</label>
                         <input
                             type="text"
                             placeholder="Ej: 1450"
@@ -222,7 +257,55 @@ const GestionFinanciera = () => {
                 </div>
             </Modal>
 
-            {/* MODAL HISTORIAL (Simple tabla de movimientos) */}
+            {/* MODAL DEPÓSITO (NUEVO) */}
+            <Modal isOpen={depositoModalOpen} onClose={() => setDepositoModalOpen(false)}>
+                <div className="modal-bono">
+                    <h3 style={{ color: '#10b981' }}>💰 Realizar Depósito a {selectedTecnico?.nombre}</h3>
+                    <p style={{ fontSize: '0.9em', color: '#666', marginBottom: '15px' }}>
+                        Este monto se sumará a la billetera del técnico (Saldo a Favor) y se le enviará una notificación.
+                    </p>
+                    <form onSubmit={enviarDeposito}>
+                        <div className="form-group">
+                            <label>Método de Pago</label>
+                            <select
+                                value={depositoData.metodo}
+                                onChange={e => setDepositoData({ ...depositoData, metodo: e.target.value })}
+                                style={{ width: '100%', padding: '8px' }}
+                            >
+                                <option value="Transferencia">Transferencia Bancaria</option>
+                                <option value="Efectivo">Efectivo</option>
+                                <option value="Deposito OXXO">Depósito OXXO</option>
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label>Monto a Depositar ($)</label>
+                            <input
+                                type="number"
+                                required
+                                min="1"
+                                placeholder="0.00"
+                                value={depositoData.monto}
+                                onChange={e => setDepositoData({ ...depositoData, monto: e.target.value })}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>Referencia / Folio</label>
+                            <input
+                                type="text"
+                                required
+                                placeholder="Ej: SPEI-55432 o Concepto"
+                                value={depositoData.referencia}
+                                onChange={e => setDepositoData({ ...depositoData, referencia: e.target.value })}
+                            />
+                        </div>
+                        <button className="btn-primary-full" style={{ backgroundColor: '#10b981' }} type="submit">
+                            Confirmar Depósito
+                        </button>
+                    </form>
+                </div>
+            </Modal>
+
+            {/* MODAL HISTORIAL */}
             <Modal isOpen={historialModalOpen} onClose={() => setHistorialModalOpen(false)}>
                 <div className="modal-historial">
                     <h3>Historial: {selectedTecnico?.nombre}</h3>

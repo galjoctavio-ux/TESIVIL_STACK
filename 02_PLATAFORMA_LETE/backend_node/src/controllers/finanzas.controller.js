@@ -218,3 +218,46 @@ export const reportarGasto = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+// ... (resto del código existente) ...
+
+// NUEVA FUNCIÓN: Depósito directo desde Admin
+// POST /api/finanzas/deposito-admin
+export const realizarDepositoAdmin = async (req, res) => {
+    const { tecnicoId, monto, referencia, metodo } = req.body;
+
+    // Validación básica
+    if (!tecnicoId || !monto || !referencia) {
+        return res.status(400).json({ error: 'Faltan datos requeridos (tecnicoId, monto, referencia)' });
+    }
+
+    try {
+        // 1. Insertar la transacción como APROBADA directamente
+        const { error } = await supabaseAdmin
+            .from('billetera_transacciones')
+            .insert({
+                tecnico_id: tecnicoId,
+                tipo: 'DEPOSITO', // Nuevo tipo para diferenciarlo de PAGO_SEMANAL
+                monto: Math.abs(monto), // Aseguramos que sea positivo (Suma al saldo del técnico)
+                descripcion: `Depósito Admin (${metodo}): ${referencia}`,
+                estado: 'APROBADO', // Al hacerlo el admin, entra directo como aprobado
+                aprobado_por: req.user ? req.user.id : 'ADMIN_PANEL', // Si tienes el usuario en el request
+                fecha_aprobacion: new Date()
+            });
+
+        if (error) throw error;
+
+        res.json({ success: true, message: 'Depósito aplicado correctamente' });
+
+        // 2. Notificar al técnico (Reutilizando tu función interna existente)
+        await enviarPushAlTecnico(
+            tecnicoId,
+            '💰 Nuevo Depósito Recibido',
+            `Administración te depositó $${monto} vía ${metodo}. Referencia: ${referencia}`
+        );
+
+    } catch (error) {
+        console.error("Error en depósito admin:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
