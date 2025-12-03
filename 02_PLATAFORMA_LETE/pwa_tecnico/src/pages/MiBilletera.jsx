@@ -178,11 +178,13 @@ const MiBilletera = () => {
                                 {tx.tipo === 'BONO' && '🎉'}
                                 {tx.tipo === 'PAGO_SEMANAL' && '🏦'}
                                 {tx.tipo === 'GASTO_OPERATIVO' && '🛒'}
+                                {tx.tipo === 'DEPOSITO' && '💰'}
                             </div>
                             <div className="tx-data">
                                 <h4>
                                     {tx.tipo === 'GASTO_OPERATIVO' ? 'Reembolso Gasto' :
-                                        tx.descripcion || tx.tipo}
+                                        tx.tipo === 'DEPOSITO' ? 'Fondo Recibido (Admin)' :
+                                            tx.descripcion || tx.tipo}
                                 </h4>
                                 <span>{new Date(tx.created_at).toLocaleDateString()}</span>
                                 {tx.estado !== 'APROBADO' && <span className={`tx-badge ${tx.estado.toLowerCase()}`}> {tx.estado} </span>}

@@ -238,7 +238,7 @@ export const realizarDepositoAdmin = async (req, res) => {
             .insert({
                 tecnico_id: tecnicoId,
                 tipo: 'DEPOSITO', // Nuevo tipo para diferenciarlo de PAGO_SEMANAL
-                monto: Math.abs(monto), // Aseguramos que sea positivo (Suma al saldo del técnico)
+                monto: -Math.abs(monto), // Aseguramos que sea positivo (Suma al saldo del técnico)
                 descripcion: `Depósito Admin (${metodo}): ${referencia}`,
                 estado: 'APROBADO', // Al hacerlo el admin, entra directo como aprobado
                 aprobado_por: req.user ? req.user.id : 'ADMIN_PANEL', // Si tienes el usuario en el request
