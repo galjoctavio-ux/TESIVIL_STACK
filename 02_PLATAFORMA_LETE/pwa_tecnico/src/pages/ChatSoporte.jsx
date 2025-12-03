@@ -4,6 +4,7 @@ import { Send, User, HardHat, StickyNote, ArrowLeft } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { crmApi as api } from '../apiService';
 import { useAuth } from '../context/AuthContext'; // <--- 1. IMPORTAR ESTO
+import { supabase } from '../supabaseClient'; // <--- 1. AGREGAR ESTO
 
 // URL SEGURA de tu Backend Nuevo
 //const API_URL = 'https://api.tesivil.com/api';
@@ -76,40 +77,60 @@ const ChatSoporte = () => {
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     };
 
-    // 4. Acciones (Enviar y Cambiar Estado)
     const handleSend = async (e) => {
         e.preventDefault();
+
+        // Validaciones básicas
         if (!inputText.trim() || !selectedChat) return;
+
+        // Guardamos el texto y limpiamos el input para que se sienta rápido
         const tempContent = inputText;
         setInputText('');
 
-        // 1. OBTENER EL NOMBRE DEL TÉCNICO
-        // Intentamos sacar el nombre de los metadatos de Supabase
-        const nombreTecnico =
-            user?.user_metadata?.nombre_completo ||
-            user?.user_metadata?.nombre ||
-            user?.user_metadata?.full_name ||
-            user?.email?.split('@')[0] || // Fallback al email si no hay nombre
-            "Un Ingeniero";
-
         try {
-            // Auto-asignar si respondo a un ticket de la bolsa
+            // --- 1. OBTENER EL NOMBRE REAL (Solución para "tavo1992...") ---
+            let senderName = "El técnico"; // Nombre por defecto (fallback)
+
+            if (user?.id) {
+                // Consultamos la tabla 'profiles' en Supabase
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('nombre')
+                    .eq('id', user.id)
+                    .single();
+
+                // Si encontramos el perfil, usamos ese nombre
+                if (data && data.nombre) {
+                    senderName = data.nombre;
+                }
+            }
+            // ---------------------------------------------------------------
+
+            // 2. Auto-asignar el chat si es nuevo (está en la bolsa) y respondo públicamente
             if (selectedChat.status === 'TECH_POOL' && !isInternal) {
                 await handleStatusChange('OPEN', 'TECH');
             }
 
+            // 3. Enviar mensaje al Backend (AWS) incluyendo el nombre real
             await api.post(`/conversations/${selectedChat.id}/send`, {
                 content: tempContent,
                 is_internal: isInternal,
-                senderName: nombreTecnico // <--- CAMBIO CLAVE
+                senderName: senderName // <--- Aquí va el nombre correcto de Supabase
             });
 
+            // 4. Actualizar la vista del chat
             const res = await api.get(`/conversations/${selectedChat.id}/messages`);
             setMessages(res.data);
             scrollToBottom();
+
+            // Opcional: Si enviaste una nota interna, regresamos a modo público automáticamente
+            // Si prefieres que se quede en modo nota, borra esta línea:
             setIsInternal(false);
+
         } catch (error) {
+            console.error("Error enviando mensaje:", error);
             alert("Error enviando mensaje. Verifica tu conexión.");
+            // Si falló, le regresamos el texto al input para que no lo pierda
             setInputText(tempContent);
         }
     };
