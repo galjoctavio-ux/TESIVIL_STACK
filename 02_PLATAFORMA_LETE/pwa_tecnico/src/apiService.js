@@ -13,6 +13,16 @@ const phpApi = axios.create({
   baseURL: '/', // El proxy de Vite se encargará de redirigir /api -> backend_php
 });
 
+// --- 2. NUEVA INSTANCIA PARA CRM (AWS) ---
+// Esto soluciona el problema de seguridad globalmente
+export const crmApi = axios.create({
+  baseURL: 'https://api.tesivil.com/api', // Tu URL de AWS
+  headers: {
+    'Content-Type': 'application/json',
+    'x-app-key': 'crm_secret_key' // <--- AQUÍ ESTÁ LA LLAVE MAESTRA (Debe coincidir con el .env de AWS)
+  }
+});
+
 // Interceptor para manejar errores de forma centralizada para PHP
 phpApi.interceptors.response.use(
   (response) => response,

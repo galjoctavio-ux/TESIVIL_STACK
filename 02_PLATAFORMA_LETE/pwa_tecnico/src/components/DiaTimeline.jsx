@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import dayjs from 'dayjs';
-import { getAgendaPorDia } from '../apiService';
+import { getAgendaPorDia, crmApi } from '../apiService';
 import CierreCasoModal from './CierreCasoModal';
+
 
 // Altura aumentada para dar espacio a la tarjeta
 const HOUR_HEIGHT = 140;
 
 // URL DEL BACKEND NUEVO (Node.js) - Asegúrate de que tenga HTTPS
-const CRM_API = 'https://api.tesivil.com/api';
+//const CRM_API = 'https://api.tesivil.com/api';
 
 const timelineContainerStyles = {
   position: 'relative',
@@ -141,15 +142,11 @@ const DiaTimeline = ({ date }) => {
     }
 
     try {
-      // 1. Petición al Backend Nuevo (CRM)
-      // Usamos el Header 'x-app-key' por si activaste la seguridad en el CRM, 
-      // si no, no afecta enviarlo.
-      const res = await axios.post(`${CRM_API}/conversations/init`, {
+      // 1. Petición al Backend Nuevo (CRM) usando la instancia segura
+      // Ya no hace falta poner headers ni URL completa aquí, crmApi lo hace solo.
+      const res = await crmApi.post('/conversations/init', {
         phone: telefono,
         name: nombre
-      }, {
-        //Opcional: Si pusiste seguridad en el CRM, descomenta esto:
-        headers: { 'x-app-key': 'crm_secret_key' }
       });
 
       // 2. Redirección fluida
@@ -161,7 +158,12 @@ const DiaTimeline = ({ date }) => {
 
     } catch (error) {
       console.error('Error abriendo chat:', error);
-      alert("No se pudo conectar con el servicio de chat. Revisa tu internet.");
+      // Muestra un mensaje más claro si es error de autenticación
+      if (error.response && error.response.status === 403) {
+        alert("Error de seguridad: La llave del API no coincide con el servidor.");
+      } else {
+        alert("No se pudo conectar con el servicio de chat.");
+      }
     }
   };
 

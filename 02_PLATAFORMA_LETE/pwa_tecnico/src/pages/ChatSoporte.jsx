@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+//import axios from 'axios';
 import { Send, User, HardHat, StickyNote, ArrowLeft } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { crmApi as api } from '../apiService';
 
 // URL SEGURA de tu Backend Nuevo
-const API_URL = 'https://api.tesivil.com/api';
+//const API_URL = 'https://api.tesivil.com/api';
 
-const api = axios.create({
-    baseURL: API_URL,
-    headers: {
-        'x-app-key': 'Luz2025_Seguro$' // <--- LA MISMA CLAVE DEL .ENV
-    }
-});
+//const api = axios.create({
+//    baseURL: API_URL,
+//    headers: {
+//        'x-app-key': 'Luz2025_Seguro$' // <--- LA MISMA CLAVE DEL .ENV
+//    }
+//});
 
 const ChatSoporte = () => {
     const navigate = useNavigate();
