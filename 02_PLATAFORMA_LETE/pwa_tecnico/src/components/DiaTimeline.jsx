@@ -149,7 +149,7 @@ const DiaTimeline = ({ date }) => {
         name: nombre
       }, {
         //Opcional: Si pusiste seguridad en el CRM, descomenta esto:
-        headers: { 'x-app-key': 'Luz2025_Seguro$' }
+        headers: { 'x-app-key': 'crm_secret_key' }
       });
 
       // 2. Redirección fluida
