@@ -438,7 +438,12 @@ export const generarPDF = async (datos) => {
     });
 
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    // Aumentamos el timeout a 60 segundos (60000ms) para que no se cuelgue si QuickChart o el logo tardan
+    await page.setContent(html, {
+      waitUntil: 'networkidle0',
+      timeout: 120000
+    });
 
     const pdfBuffer = await page.pdf({
       format: 'Letter',
