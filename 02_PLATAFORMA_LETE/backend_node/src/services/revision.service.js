@@ -9,8 +9,7 @@ import {
 import { enviarReportePorEmail } from './email.service.js';
 import { generarPDF } from './pdf.service.js';
 // Importamos la función para notificar al técnico
-import { sendNotificationToUser } from '../controllers/notifications.controller.js';
-
+import { sendNotificationToEmail } from '../controllers/notifications.controller.js';
 /**
  * Helpers
  */
@@ -603,9 +602,9 @@ export const generarArtefactosYNotificar = async (dataContext, tecnicoAuth) => {
     // -----------------------
     // G. Notificación PUSH al Técnico (FINAL)
     // -----------------------
-    await sendNotificationToUser(tecnicoAuth.id, {
-      title: '✅ Reporte Listo y Enviado',
-      body: `El PDF del cliente ${casoUpdated?.cliente?.nombre_completo || ''} ha sido generado y enviado correctamente.`,
+    await sendNotificationToEmail(tecnicoAuth.email, {
+      title: '✅ Reporte Listo',
+      body: `El PDF del cliente ${casoUpdated?.cliente?.nombre_completo || ''} ha sido enviado.`,
       url: `/casos/detalle/${revisionData.caso_id}`
     });
 
@@ -620,12 +619,14 @@ export const generarArtefactosYNotificar = async (dataContext, tecnicoAuth) => {
       })
       .eq('id', revisionId);
 
-    // Avisar error al técnico
+    /// Avisar error al técnico
     const payloadPushError = {
       title: '⚠️ Error al generar Reporte',
-      body: `Hubo un fallo generando el PDF del caso. El sistema reintentará o contacta soporte.`,
+      body: `Hubo un fallo generando el PDF. El sistema reintentará automáticamente.`,
       url: `/casos/detalle/${revisionData.caso_id}`
     };
-    await sendNotificationToUser(tecnicoAuth.id, payloadPushError);
+
+    // Usamos el EMAIL del técnico
+    await sendNotificationToEmail(tecnicoAuth.email, payloadPushError);
   }
 };

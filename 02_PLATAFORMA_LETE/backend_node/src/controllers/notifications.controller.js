@@ -160,3 +160,29 @@ export const sendAdminNotification = async (req, res) => {
         res.status(500).json({ message: 'Error interno al enviar notificación.' });
     }
 };
+
+// --- AGREGA ESTA NUEVA FUNCIÓN ---
+export const sendNotificationToEmail = async (email, payload) => {
+    try {
+        if (!email) {
+            console.warn('[Push] No se proporcionó email para enviar notificación.');
+            return;
+        }
+
+        // 1. Traducir Email (Supabase) -> ID Numérico (MySQL/Legacy)
+        const [users] = await pool.query('SELECT id FROM ea_users WHERE email = ?', [email]);
+
+        if (users.length === 0) {
+            console.warn(`[Push] El usuario con email ${email} no existe en la tabla ea_users (MySQL).`);
+            return;
+        }
+
+        const userId = users[0].id;
+
+        // 2. Reutilizar la lógica existente enviando al ID numérico
+        await sendNotificationToUser(userId, payload);
+
+    } catch (error) {
+        console.error(`[Push] Error al enviar notificación a ${email}:`, error.message);
+    }
+};
