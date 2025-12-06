@@ -112,19 +112,21 @@ const RevisionWizard = () => {
   };
 
   const handleSubmit = async () => {
-    // Validación final de seguridad
+    // 1. Validaciones de seguridad (Igual que antes)
     if (!formData.caso_id) {
       alert("Error: No se ha detectado el ID del caso. Vuelva a la agenda e intente de nuevo.");
       return;
     }
 
     if (!formData.cliente_email) {
-      alert("El correo del cliente es obligatorio.");
-      setCurrentStepIndex(0);
+      alert("El correo del cliente es obligatorio para enviar el reporte.");
+      setCurrentStepIndex(0); // Regresamos al paso 1 si falta el correo
       return;
     }
 
     setIsSubmitting(true);
+
+    // 2. Preparar el Payload (Igual que antes)
     const { equiposData, firmaBase64, ...revisionData } = formData;
     const payload = {
       revisionData,
@@ -133,13 +135,21 @@ const RevisionWizard = () => {
     };
 
     try {
+      // 3. Petición al Backend
+      // Ahora esta línea tardará menos de 1 segundo en responder
       await api.post('/revisiones', payload);
-      alert('Revisión enviada con éxito');
-      // Redirigimos a la agenda o al detalle del caso completado
+
+      // 4. Feedback Inmediato al Técnico
+      // Le explicamos que ya puede irse, el servidor seguirá trabajando.
+      alert('✅ Revisión guardada correctamente.\n\nEl sistema generará el PDF y lo enviará al cliente en unos momentos.\n\nRecibirás una notificación en tu celular cuando el proceso termine.');
+
+      // 5. Salir a la Agenda
       navigate('/');
+
     } catch (error) {
       console.error('Error al enviar la revisión:', error);
-      alert('Hubo un error al enviar la revisión. Por favor, inténtalo de nuevo.');
+      // Mensaje de error más claro
+      alert('Hubo un error al guardar los datos de la revisión. Por favor, verifica tu conexión e inténtalo de nuevo.');
     } finally {
       setIsSubmitting(false);
     }

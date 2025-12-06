@@ -8,6 +8,8 @@ import {
 } from './calculos.service.js';
 import { enviarReportePorEmail } from './email.service.js';
 import { generarPDF } from './pdf.service.js';
+// Importamos la función para notificar al técnico
+import { sendNotificationToUser } from '../controllers/notifications.controller.js';
 
 /**
  * Helpers
@@ -17,25 +19,35 @@ const safeParseFloat = (v, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+// Función para subir archivos respetando tu estructura de carpetas
 const uploadBufferToStorage = async (bucket, path, buffer, contentType) => {
   try {
     const { error: upErr } = await supabaseAdmin.storage.from(bucket).upload(path, buffer, {
       contentType,
       upsert: true
     });
+
     if (upErr) {
       console.error(`Error subiendo ${path} a storage:`, upErr.message || upErr);
-      return null;
+      throw upErr; // Lanzamos error para manejarlo en el catch superior
     }
+
     const { data: urlData } = supabaseAdmin.storage.from(bucket).getPublicUrl(path);
     return urlData?.publicUrl || null;
   } catch (err) {
     console.error('Error en uploadBufferToStorage:', err);
-    return null;
+    throw err;
   }
 };
 
-export const processRevision = async (payload, tecnicoAuth) => {
+/**
+ * ==================================================================
+ * FASE 1: RÁPIDA (Síncrona)
+ * Realiza cálculos, guarda en BD y retorna el ID inmediatamente.
+ * NO genera PDF ni envía correos aquí.
+ * ==================================================================
+ */
+export const crearRegistroRevision = async (payload, tecnicoAuth) => {
   const { revisionData, equiposData, firmaBase64 } = payload;
 
   if (!revisionData || !equiposData) {
@@ -82,7 +94,6 @@ export const processRevision = async (payload, tecnicoAuth) => {
   const iNeutro = safeParseFloat(datosDeTrabajo.corriente_red_n, 0);
 
   // --- LECTURAS ELÉCTRICAS (PANELES) ---
-  // Aseguramos conversión a float para evitar errores en cálculos
   datosDeTrabajo.corriente_paneles_f1 = safeParseFloat(datosDeTrabajo.corriente_paneles_f1, 0);
   datosDeTrabajo.corriente_paneles_f2 = safeParseFloat(datosDeTrabajo.corriente_paneles_f2, 0);
   datosDeTrabajo.corriente_paneles_f3 = safeParseFloat(datosDeTrabajo.corriente_paneles_f3, 0);
@@ -131,8 +142,7 @@ export const processRevision = async (payload, tecnicoAuth) => {
         break;
     }
   }
-
-  // Actualizamos el dato maestro de fuga para usarlo en el resto del proceso
+  // Actualizamos el dato maestro de fuga
   datosDeTrabajo.corriente_fuga_f1 = corrienteFugaCalculada;
 
   // Procesamiento y sanitización de equipos
@@ -195,7 +205,6 @@ export const processRevision = async (payload, tecnicoAuth) => {
 
 
   // --- DETECCIONES AUTOMÁTICAS EXTERNAS ---
-
   let resultadoDeteccionFugas = null;
   try {
     if (typeof detectarFugas === 'function') {
@@ -205,7 +214,7 @@ export const processRevision = async (payload, tecnicoAuth) => {
     console.warn('detectarFugas falló:', err?.message || err);
   }
 
-  // Lógica Solar Mejorada: Verifica si hay paneles instalados o corrientes detectadas
+  // Lógica Solar Mejorada
   let resultadoVerificarSolar = null;
   const tienePaneles = datosDeTrabajo.antiguedad_paneles != null ||
     datosDeTrabajo.corriente_paneles_f1 > 0 ||
@@ -226,41 +235,63 @@ export const processRevision = async (payload, tecnicoAuth) => {
   });
 
   // ---------------------------------------------------------
-  // 2. Guardado en BD (revisiones + equipos_revisados)
+  // Preparación del INSERT en BD (revisiones)
   // ---------------------------------------------------------
-  const datosParaInsertar = { ...datosDeTrabajo };
+  const datosParaInsertar = {
+    // Relaciones
+    caso_id: datosDeTrabajo.caso_id,
+    tecnico_id: tecnicoAuth.id,
 
-  // Limpiar campos temporales que no existen en la tabla 'revisiones'
-  delete datosParaInsertar.voltaje_fn;
-  delete datosParaInsertar.fuga_total;
-  delete datosParaInsertar.amperaje_medido;
-  // delete datosParaInsertar.antiguedad_paneles; // <--- OJO: Si tu columna en BD se llama 'paneles_antiguedad_anos', verifica que el frontend lo mande así.
-  delete datosParaInsertar.equiposData;
-  delete datosParaInsertar.caso_id;
+    // Metadata y Financieros
+    fecha_revision: new Date().toISOString(),
+    tarifa_cfe: tarifa,
+    kwh_recibo_cfe: kwhRecibo,
+    condicion_infraestructura: condicionInfra,
+    se_midieron_cargas_menores: midieronCargasMenores,
 
-  // Asignación de campos obligatorios y calculados
-  datosParaInsertar.caso_id = datosDeTrabajo.caso_id;
-  datosParaInsertar.tecnico_id = tecnicoAuth.id;
-  datosParaInsertar.diagnosticos_automaticos = diagnosticosAuto;
-  datosParaInsertar.fecha_revision = new Date().toISOString();
-  datosParaInsertar.tarifa_cfe = tarifa;
-  datosParaInsertar.kwh_recibo_cfe = kwhRecibo;
-  datosParaInsertar.condicion_infraestructura = condicionInfra;
-  datosParaInsertar.se_midieron_cargas_menores = midieronCargasMenores;
+    // Eléctricos y Físicos
+    tipo_servicio: tipoServicio,
+    voltaje_medido: voltaje,
+    corriente_red_f1: iFase1,
+    corriente_red_f2: iFase2,
+    corriente_red_f3: iFase3,
+    corriente_red_n: iNeutro,
+    corriente_fuga_f1: corrienteFugaCalculada, // Calculada
+    corriente_paneles_f1: datosDeTrabajo.corriente_paneles_f1,
+    corriente_paneles_f2: datosDeTrabajo.corriente_paneles_f2,
+    corriente_paneles_f3: datosDeTrabajo.corriente_paneles_f3,
 
-  // --- NUEVO: ASEGURAR GUARDADO DE DATOS MULTI-FASE Y SOLAR ---
-  // Asignamos explícitamente las variables que leímos en la Parte 2
-  datosParaInsertar.tipo_servicio = tipoServicio;
-  datosParaInsertar.corriente_red_f2 = iFase2;
-  datosParaInsertar.corriente_red_f3 = iFase3;
-  // Para paneles, usamos lo que ya estaba en datosDeTrabajo o 0
-  datosParaInsertar.corriente_paneles_f1 = datosDeTrabajo.corriente_paneles_f1 || 0;
-  datosParaInsertar.corriente_paneles_f2 = datosDeTrabajo.corriente_paneles_f2 || 0;
-  datosParaInsertar.corriente_paneles_f3 = datosDeTrabajo.corriente_paneles_f3 || 0;
+    tipo_medidor: datosDeTrabajo.tipo_medidor,
+    giro_medidor: datosDeTrabajo.giro_medidor,
+    sello_cfe: datosDeTrabajo.sello_cfe,
+    condicion_base_medidor: datosDeTrabajo.condicion_base_medidor,
+    edad_instalacion: datosDeTrabajo.edad_instalacion,
+    cantidad_circuitos: datosDeTrabajo.cantidad_circuitos,
+    condiciones_cc: datosDeTrabajo.condiciones_cc,
+    observaciones_cc: datosDeTrabajo.observaciones_cc,
+    tornillos_flojos: datosDeTrabajo.tornillos_flojos,
+    capacidad_vs_calibre: datosDeTrabajo.capacidad_vs_calibre,
+    se_puede_apagar_todo: sePuedeApagar,
 
-  // Guardar resultados de detecciones opcionales si existen
-  if (resultadoDeteccionFugas) datosParaInsertar.resultado_deteccion_fugas = resultadoDeteccionFugas;
-  if (resultadoVerificarSolar) datosParaInsertar.resultado_verificar_solar = resultadoVerificarSolar;
+    // Solar Data
+    cantidad_paneles: datosDeTrabajo.cantidad_paneles,
+    watts_por_panel: datosDeTrabajo.watts_por_panel,
+    paneles_antiguedad_anos: datosDeTrabajo.paneles_antiguedad_anos,
+
+    // Diagnósticos
+    diagnosticos_automaticos: diagnosticosAuto,
+    causas_alto_consumo: causasLimpias,
+    recomendaciones_tecnico: datosDeTrabajo.recomendaciones_tecnico,
+    resultado_deteccion_fugas: resultadoDeteccionFugas,
+    resultado_verificar_solar: resultadoVerificarSolar,
+
+    // Control de PDF y Email
+    cliente_email: datosDeTrabajo.cliente_email,
+
+    // --- NUEVOS CAMPOS PARA EL PROCESO ASÍNCRONO ---
+    proceso_status: 'pendiente',
+    intentos_envio: 0
+  };
 
   // INSERCIÓN DE LA REVISIÓN
   const { data: revData, error: revError } = await supabaseAdmin
@@ -297,204 +328,304 @@ export const processRevision = async (payload, tecnicoAuth) => {
     }
   }
 
-  // ACTUALIZACIÓN DEL CASO Y RECUPERACIÓN DE CLIENTE
-  let casoUpdated = null;
+  // Retornamos TODO lo necesario para que la función de fondo
+  // no tenga que volver a calcular cosas ni consultar la DB innecesariamente.
+  return {
+    revisionId: newRevisionId,
+    revisionData: revData,         // Datos guardados (incluye los calculados)
+    equiposCalculados,             // Array de equipos con consumos
+    firmaBase64: firmaBase64,      // Firma para procesar después
+    datosOriginales: datosDeTrabajo // Datos crudos para referencias
+  };
+};
+
+/**
+ * ==================================================================
+ * FASE 2: LENTA (Asíncrona - Background)
+ * Genera PDF, consulta IA, envía Email y Notifica vía Push
+ * ==================================================================
+ */
+export const generarArtefactosYNotificar = async (dataContext, tecnicoAuth) => {
+  const { revisionId, revisionData, equiposCalculados, firmaBase64, datosOriginales } = dataContext;
+
+  console.log(`[Background] Iniciando proceso pesado para revisión #${revisionId}`);
+
   try {
-    // Mantenemos el status 'en_curso' para permitir venta posterior (Tu corrección anterior)
-    const { data: casoData, error: casoError } = await supabaseAdmin
-      .from('casos')
-      .update({ status: 'en_curso' })
-      .eq('id', datosDeTrabajo.caso_id)
-      .select('id, cliente:clientes(nombre_completo, direccion_principal, email)')
-      .maybeSingle();
+    // 1. Marcar como procesando
+    await supabaseAdmin.from('revisiones')
+      .update({ proceso_status: 'procesando', intentos_envio: 1 })
+      .eq('id', revisionId);
 
-    if (casoError) {
-      console.warn('No se pudo actualizar el caso:', casoError.message);
-    } else {
-      casoUpdated = casoData;
-    }
-  } catch (err) {
-    console.warn('Error actualizando caso:', err);
-  }
+    // -----------------------
+    // A. Perfil del ingeniero
+    // -----------------------
+    let nombreIngeniero = 'Ingeniero Especialista';
+    let firmaIngenieroUrl = null;
 
-  // Fallback: Si no obtuvimos cliente por la actualización
-  if (!casoUpdated) {
     try {
-      const { data: casoFetch, error: casoFetchErr } = await supabaseAdmin
-        .from('casos')
-        .select('id, cliente:clientes(nombre_completo, direccion_principal, email)')
-        .eq('id', datosDeTrabajo.caso_id)
+      const { data: perfil, error: perfilError } = await supabaseAdmin
+        .from('profiles')
+        .select('nombre, firma_url')
+        .eq('id', tecnicoAuth.id)
         .maybeSingle();
 
-      if (!casoFetchErr) casoUpdated = casoFetch;
-    } catch (err) {
-      console.warn('No se pudo recuperar info del caso:', err);
+      if (!perfilError && perfil) {
+        nombreIngeniero = perfil.nombre || tecnicoAuth.user_metadata?.full_name || nombreIngeniero;
+        firmaIngenieroUrl = perfil.firma_url || null;
+      } else {
+        nombreIngeniero = tecnicoAuth.user_metadata?.full_name || tecnicoAuth.email || nombreIngeniero;
+      }
+    } catch (e) {
+      console.error('Error recuperando perfil ingeniero:', e?.message || e);
+      nombreIngeniero = tecnicoAuth.email || nombreIngeniero;
     }
-  }
 
-
-  // ---------------------------------------------------------
-  // 3. Procesamiento de firma del cliente (si viene)
-  // ---------------------------------------------------------
-  let firmaClienteUrl = null;
-  if (firmaBase64) {
+    // -----------------------
+    // B. Actualización del CASO y Recuperación CLIENTE
+    // -----------------------
+    let casoUpdated = null;
     try {
-      // Decodificamos el base64 que viene del canvas
-      const matches = firmaBase64.match(/^data:(.+);base64,(.+)$/);
-      if (matches && matches.length === 3) {
-        const contentType = matches[1];
-        const bufferData = Buffer.from(matches[2], 'base64');
-        const filePath = `firmas/revision-cliente-${newRevisionId}.png`;
+      // Mantenemos el status 'en_curso'
+      const { data: casoData, error: casoError } = await supabaseAdmin
+        .from('casos')
+        .update({ status: 'en_curso' })
+        .eq('id', revisionData.caso_id)
+        .select('id, cliente:clientes(nombre_completo, direccion_principal, email)')
+        .maybeSingle();
 
-        // Subimos la imagen al bucket 'reportes'
-        const publicUrl = await uploadBufferToStorage('reportes', filePath, bufferData, contentType);
-        if (publicUrl) {
-          firmaClienteUrl = publicUrl;
-          // Actualizamos la revisión con la URL de la firma
-          await supabaseAdmin.from('revisiones').update({ firma_url: firmaClienteUrl }).eq('id', newRevisionId);
+      if (casoError) {
+        console.warn('No se pudo actualizar el caso:', casoError.message);
+      } else {
+        casoUpdated = casoData;
+      }
+    } catch (err) {
+      console.warn('Error actualizando caso:', err);
+    }
+
+    // Fallback: Si no obtuvimos cliente por la actualización
+    if (!casoUpdated) {
+      try {
+        const { data: casoFetch, error: casoFetchErr } = await supabaseAdmin
+          .from('casos')
+          .select('id, cliente:clientes(nombre_completo, direccion_principal, email)')
+          .eq('id', revisionData.caso_id)
+          .maybeSingle();
+
+        if (!casoFetchErr) casoUpdated = casoFetch;
+      } catch (err) {
+        console.warn('No se pudo recuperar info del caso:', err);
+      }
+    }
+
+    // -----------------------
+    // C. Procesamiento de FIRMA CLIENTE
+    // -----------------------
+    let firmaClienteUrl = null;
+    if (firmaBase64) {
+      try {
+        // Decodificamos el base64
+        const matches = firmaBase64.match(/^data:(.+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const contentType = matches[1];
+          const bufferData = Buffer.from(matches[2], 'base64');
+          // Ruta ajustada a tu imagen de Supabase: reportes > firmas
+          const filePath = `firmas/cliente-${revisionId}.png`;
+
+          const publicUrl = await uploadBufferToStorage('reportes', filePath, bufferData, contentType);
+          if (publicUrl) {
+            firmaClienteUrl = publicUrl;
+            // Actualizamos la revisión con la URL de la firma
+            await supabaseAdmin.from('revisiones').update({ firma_url: firmaClienteUrl }).eq('id', revisionId);
+          }
+        } else {
+          console.warn('Formato de firmaBase64 no reconocido.');
+        }
+      } catch (errFirma) {
+        console.error('Error procesando firma del cliente:', errFirma);
+      }
+    }
+
+    // -----------------------
+    // D. CÁLCULOS AVANZADOS DE DESPERDICIO (Para el PDF)
+    // -----------------------
+    // Recuperamos variables necesarias
+    const voltaje = revisionData.voltaje_medido || 127;
+    const corrienteFuga = revisionData.corriente_fuga_f1 || 0;
+    const kwhRecibo = revisionData.kwh_recibo_cfe || 0;
+    const midieronCargasMenores = revisionData.se_midieron_cargas_menores;
+
+    // 1. Fuga en Infraestructura (V * A_Fuga * 24h * 60d / 1000)
+    const kwhFugaInfraestructura = (voltaje * corrienteFuga * 24 * 60) / 1000;
+
+    // 2. Ineficiencia de Equipos (Suma total de consumo de equipos Malos o Regulares)
+    let kwhIneficienciaEquipos = 0;
+    equiposCalculados.forEach(eq => {
+      if (eq.estado_equipo === 'Malo' || eq.estado_equipo === 'Regular') {
+        kwhIneficienciaEquipos += (eq.kwh_bimestre_calculado || 0);
+      }
+    });
+
+    // 3. Consumo Auditado Ajustado
+    const totalKwhAuditado = equiposCalculados.reduce((acc, c) => acc + (c.kwh_bimestre_calculado || 0), 0);
+    const factorHolgura = midieronCargasMenores ? 1.0 : 1.20;
+    const totalAuditadoAjustado = totalKwhAuditado * factorHolgura;
+
+    // 4. Consumo No Identificado (Diferencia vs Recibo CFE)
+    let kwhNoIdentificado = kwhRecibo - totalAuditadoAjustado;
+    if (kwhNoIdentificado < 0) kwhNoIdentificado = 0;
+
+    // 5. TOTAL DESPERDICIO
+    const kwhDesperdicioTotal = kwhFugaInfraestructura + kwhIneficienciaEquipos + kwhNoIdentificado;
+
+    // Cálculos para Gráfica
+    const kwhFugaReal = kwhFugaInfraestructura + kwhNoIdentificado; // Rojo
+    let kwhEficiente = kwhRecibo - kwhDesperdicioTotal; // Verde
+    if (kwhEficiente < 0) kwhEficiente = 0;
+
+    // Porcentaje de impacto
+    let porcentajeFuga = 0;
+    if (kwhRecibo > 0) {
+      porcentajeFuga = (kwhDesperdicioTotal / kwhRecibo) * 100;
+    }
+    const alertaFuga = porcentajeFuga >= 15;
+
+    // -----------------------
+    // E. Generación de PDF
+    // -----------------------
+    let pdfUrl = null;
+
+    const datosParaPdf = {
+      header: {
+        id: revisionId,
+        fecha_revision: revisionData.fecha_revision,
+        cliente_nombre: casoUpdated?.cliente?.nombre_completo || 'Cliente',
+        cliente_direccion: casoUpdated?.cliente?.direccion_principal || 'Dirección no registrada',
+        cliente_email: revisionData.cliente_email || casoUpdated?.cliente?.email || '',
+        tecnico_nombre: nombreIngeniero,
+        firma_ingeniero_url: firmaIngenieroUrl,
+        tarifa: revisionData.tarifa_cfe,
+        condicion_infra: revisionData.condicion_infraestructura
+      },
+      mediciones: {
+        ...datosOriginales, // Pasamos todos los datos crudos para visualización en tabla
+        corriente_fuga_f1: corrienteFuga
+      },
+      finanzas: {
+        kwh_recibo: kwhRecibo,
+        kwh_auditado: totalAuditadoAjustado,
+        kwh_desperdicio_total: kwhDesperdicioTotal,
+
+        // Desglose Gráfica
+        kwh_eficiente: kwhEficiente,
+        kwh_ineficiencia: kwhIneficienciaEquipos,
+        kwh_fuga_real: kwhFugaReal,
+
+        porcentaje_desperdicio: porcentajeFuga,
+        alerta_fuga: alertaFuga
+      },
+      desglose_desperdicio: {
+        fuga_infraestructura: kwhFugaInfraestructura,
+        equipos_ineficientes: kwhIneficienciaEquipos,
+        consumo_no_identificado: kwhNoIdentificado
+      },
+      equipos: equiposCalculados,
+      consumo_total_estimado: totalAuditadoAjustado,
+      causas_alto_consumo: revisionData.causas_alto_consumo,
+      recomendaciones_tecnico: revisionData.recomendaciones_tecnico || '',
+      firma_cliente_url: firmaClienteUrl
+    };
+
+    try {
+      console.log('Generando PDF...');
+      const pdfBuffer = await generarPDF(datosParaPdf);
+
+      if (pdfBuffer) {
+        // Ruta ajustada a tu imagen: bucket 'reportes', carpeta 'reportes'
+        const pdfPath = `reportes/reporte-revision-${revisionId}.pdf`;
+        const publicPdfUrl = await uploadBufferToStorage('reportes', pdfPath, pdfBuffer, 'application/pdf');
+
+        if (publicPdfUrl) {
+          pdfUrl = publicPdfUrl;
+          await supabaseAdmin.from('revisiones')
+            .update({ pdf_url: pdfUrl, proceso_status: 'completado' })
+            .eq('id', revisionId);
+          console.log('PDF generado y subido correctamente:', pdfUrl);
+        } else {
+          throw new Error('No se pudo obtener URL pública del PDF subido.');
         }
       } else {
-        console.warn('Formato de firmaBase64 no reconocido.');
+        throw new Error("Puppeteer no retornó un buffer válido.");
       }
-    } catch (errFirma) {
-      console.error('Error procesando firma del cliente:', errFirma);
+    } catch (pdfError) {
+      console.error('Error crítico en proceso de PDF:', pdfError);
+      throw pdfError; // Relanzamos para caer en el catch principal y notificar error
     }
-  }
 
-  // ---------------------------------------------------------
-  // 4. Generación de PDF
-  // ---------------------------------------------------------
-  let pdfUrl = null;
+    // -----------------------
+    // F. Envío de correo
+    // -----------------------
+    const clienteEmail = revisionData.cliente_email || casoUpdated?.cliente?.email || '';
 
-  // CÁLCULO PARA GRÁFICA DE 3 PARTES:
-  // 1. Fuga Real (Peligrosa): Infraestructura + Consumo No Identificado
-  const kwhFugaReal = kwhFugaInfraestructura + kwhNoIdentificado;
+    if (pdfUrl && clienteEmail) {
+      try {
+        console.log(`Preparando datos para email a ${clienteEmail}...`);
 
-  // 2. Ineficiencia (Equipos): Lo que gastan de más los equipos malos
-  const kwhIneficiencia = kwhIneficienciaEquipos;
+        // Unificar hallazgos manuales y automáticos
+        const manuales = revisionData.causas_alto_consumo || [];
+        const automaticos = revisionData.diagnosticos_automaticos || [];
 
-  // 3. Consumo Eficiente (Lo que sobra):
-  // Si el recibo es 1000 y desperdicio total es 300, el eficiente es 700.
-  let kwhEficiente = kwhRecibo - kwhDesperdicioTotal;
-  if (kwhEficiente < 0) kwhEficiente = 0; // Protección por si los cálculos exceden el recibo
+        let hallazgosCombinados = [...manuales, ...automaticos];
 
-  // Preparamos el objeto con TODA la info para pintar el reporte
-  const datosParaPdf = {
-    header: {
-      id: newRevisionId,
-      fecha_revision: revData.fecha_revision,
-      cliente_nombre: casoUpdated?.cliente?.nombre_completo || 'Cliente',
-      cliente_direccion: casoUpdated?.cliente?.direccion_principal || 'Dirección no registrada',
-      cliente_email: revData.cliente_email || casoUpdated?.cliente?.email || '',
-      tecnico_nombre: nombreIngeniero,
-      firma_ingeniero_url: firmaIngenieroUrl,
-      tarifa,
-      condicion_infra: condicionInfra
-    },
-    mediciones: {
-      ...datosDeTrabajo,
-      corriente_fuga_f1: datosDeTrabajo.corriente_fuga_f1
-    },
-    finanzas: {
-      kwh_recibo: kwhRecibo,
-      kwh_auditado: totalAuditadoAjustado,
-      kwh_desperdicio_total: kwhDesperdicioTotal, // Total general
+        const listaFinalParaEmail = hallazgosCombinados
+          .map(item => {
+            if (typeof item === 'object' && item !== null) {
+              return item.texto || item.mensaje || item.description || '';
+            }
+            return String(item);
+          })
+          .filter(texto => texto && texto.trim().length > 0)
+          .filter((valor, indice, self) => self.indexOf(valor) === indice);
 
-      // NUEVO: Desglose para gráfica y textos
-      kwh_eficiente: kwhEficiente,
-      kwh_ineficiencia: kwhIneficiencia, // Equipos viejos (Naranja)
-      kwh_fuga_real: kwhFugaReal,        // Cables/Fantasma (Rojo)
-
-      porcentaje_desperdicio: porcentajeFuga,
-      alerta_fuga: alertaFuga
-    },
-    desglose_desperdicio: {
-      fuga_infraestructura: kwhFugaInfraestructura,
-      equipos_ineficientes: kwhIneficienciaEquipos,
-      consumo_no_identificado: kwhNoIdentificado
-    },
-    equipos: equiposCalculados,
-    consumo_total_estimado: totalAuditadoAjustado,
-    causas_alto_consumo: causasLimpias,
-    recomendaciones_tecnico: revData.recomendaciones_tecnico || '',
-    firma_cliente_url: firmaClienteUrl
-  };
-
-  try {
-    console.log('Generando PDF...');
-    const pdfBuffer = await generarPDF(datosParaPdf);
-
-    if (pdfBuffer) {
-      // ... (el resto del código de subida se mantiene igual)
-      const pdfPath = `reportes/reporte-${newRevisionId}.pdf`;
-      const publicPdfUrl = await uploadBufferToStorage('reportes', pdfPath, pdfBuffer, 'application/pdf');
-
-      if (publicPdfUrl) {
-        pdfUrl = publicPdfUrl;
-        await supabaseAdmin.from('revisiones').update({ pdf_url: pdfUrl }).eq('id', newRevisionId);
-        console.log('PDF generado y subido correctamente:', pdfUrl);
-      } else {
-        console.error('No se pudo obtener URL pública del PDF subido.');
+        await enviarReportePorEmail(
+          clienteEmail,
+          casoUpdated?.cliente?.nombre_completo || 'Cliente Estimado',
+          pdfUrl,
+          listaFinalParaEmail
+        );
+        console.log("Email enviado con éxito.");
+      } catch (mailErr) {
+        console.error('Error enviando correo:', mailErr?.message || mailErr);
+        // No lanzamos error aquí para no marcar todo el proceso como fallido si solo falló el email
+        // pero el PDF sí se generó. Aunque podrías decidir lo contrario.
       }
     }
-  } catch (pdfError) {
-    console.error('Error crítico en proceso de PDF:', pdfError);
-  }
 
-  // ---------------------------------------------------------
-  // 5. Envío de correo (solo si hay PDF y email)
-  // ---------------------------------------------------------
-  const clienteEmail = revData.cliente_email || casoUpdated?.cliente?.email || '';
+    // -----------------------
+    // G. Notificación PUSH al Técnico (FINAL)
+    // -----------------------
+    await sendNotificationToUser(tecnicoAuth.id, {
+      title: '✅ Reporte Listo y Enviado',
+      body: `El PDF del cliente ${casoUpdated?.cliente?.nombre_completo || ''} ha sido generado y enviado correctamente.`,
+      url: `/casos/detalle/${revisionData.caso_id}`
+    });
 
-  if (pdfUrl && clienteEmail) {
-    try {
-      console.log(`Preparando datos para email a ${clienteEmail}...`);
+  } catch (error) {
+    console.error(`[Background] Error procesando revisión #${revisionId}:`, error);
 
-      // A. Recuperar listas crudas de la base de datos (pueden ser null)
-      const manuales = revData.causas_alto_consumo || [];
-      const automaticos = revData.diagnosticos_automaticos || [];
+    // Registrar error en BD
+    await supabaseAdmin.from('revisiones')
+      .update({
+        proceso_status: 'error',
+        log_error: error.message || String(error)
+      })
+      .eq('id', revisionId);
 
-      // B. UNIFICACIÓN Y LIMPIEZA
-      // Creamos una sola lista combinando ambas fuentes.
-      let hallazgosCombinados = [
-        ...manuales,
-        ...automaticos
-      ];
-
-      // C. FILTRADO INTELIGENTE
-      // 1. Aseguramos que cada elemento sea TEXTO (String).
-      // 2. Eliminamos duplicados (Set).
-      // 3. Filtramos valores vacíos.
-
-      const listaFinalParaEmail = hallazgosCombinados
-        .map(item => {
-          // Si el item es un objeto complejo (ej: {id:1, texto:"..."}), intenta sacar el texto.
-          if (typeof item === 'object' && item !== null) {
-            return item.texto || item.mensaje || item.description || '';
-          }
-          // Si ya es texto, lo devolvemos tal cual.
-          return String(item);
-        })
-        .filter(texto => texto && texto.trim().length > 0) // Quitar vacíos
-        // Truco para quitar duplicados exactos:
-        .filter((valor, indice, self) => self.indexOf(valor) === indice);
-
-      // Log para depuración (ver qué estamos enviando)
-      console.log('Enviando al correo los siguientes hallazgos:', listaFinalParaEmail);
-
-      // D. Enviar el correo con la lista limpia
-      await enviarReportePorEmail(
-        clienteEmail,
-        casoUpdated?.cliente?.nombre_completo || 'Cliente Estimado',
-        pdfUrl,
-        listaFinalParaEmail // Aquí va la lista limpia, sin objetos raros
-      );
-
-    } catch (mailErr) {
-      console.error('Error enviando correo:', mailErr?.message || mailErr);
-    }
-  } else {
-    if (!pdfUrl) console.warn('No se envió correo: no existe pdfUrl.');
-    if (!clienteEmail) console.warn('No se envió correo: no existe clienteEmail.');
+    // Avisar error al técnico
+    const payloadPushError = {
+      title: '⚠️ Error al generar Reporte',
+      body: `Hubo un fallo generando el PDF del caso. El sistema reintentará o contacta soporte.`,
+      url: `/casos/detalle/${revisionData.caso_id}`
+    };
+    await sendNotificationToUser(tecnicoAuth.id, payloadPushError);
   }
 };
