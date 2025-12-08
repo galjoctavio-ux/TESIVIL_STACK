@@ -53,7 +53,7 @@ export const agendarDesdeBot = async (req, res) => {
             .insert({
                 cliente_id: clienteDB.id,
                 tecnico_id: cita.tecnico_id_supabase, // Vinculamos al técnico en BD
-                status: 'asignado', // Ya nace asignado
+                status: 'pendiente', // Ya nace pendiente
                 tipo_servicio: caso.tipo || 'DIAGNOSTICO',
                 descripcion_problema: caso.comentarios
             })
