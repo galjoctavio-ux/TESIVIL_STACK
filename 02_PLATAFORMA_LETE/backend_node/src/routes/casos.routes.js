@@ -1,46 +1,41 @@
 import { Router } from 'express';
-// IMPORTACIONES ACTUALIZADAS
 import { requireAuth, isAdmin, isTecnico } from '../middleware/auth.middleware.js';
 
-// --- MODIFICACIÓN: Importar el nuevo controlador ---
 import {
   getCasos,
   createCaso,
   updateCaso,
-  getCasoById, // <-- CAMBIADO
+  getCasoById,
   createCasoFromCotizacion,
   cerrarCasoManualTecnico,
   cerrarCaso,
-  getDetalleTecnico
+  getDetalleTecnico // Asegúrate de que esto esté importado
 } from '../controllers/casos.controller.js';
 
 const router = Router();
 
-// RUTAS ACTUALIZADAS (Middleware por ruta)
-
-// GET /lete/api/casos (Admin: ver todos | Tecnico: ver los suyos)
-// Primero requireAuth, y LUEGO el controlador decidirá
+// 1. GET /lete/api/casos (Listar todos)
 router.get('/', requireAuth, getCasos);
 
-// --- NUEVA RUTA PROTEGIDA PARA OBTENER UN CASO POR ID ---
+// 🔥 CORRECCIÓN: La ruta ESPECÍFICA va PRIMERO
+// Si la pones al final, Express podría confundirse o no llegar a ella correctamente.
+router.get('/:id/expediente', requireAuth, isTecnico, getDetalleTecnico);
+
+// 2. GET /lete/api/casos/:id (Buscar uno genérico)
+// Esta captura cualquier ID, por eso debe ir DESPUÉS de la de expediente
 router.get('/:id', requireAuth, getCasoById);
 
 // POST /lete/api/casos (Admin: crear nuevo)
-// Solo para Admins
 router.post('/', requireAuth, isAdmin, createCaso);
 
 // PUT /lete/api/casos/:id (Admin: asignar técnico, cambiar status)
-// Solo para Admins
 router.put('/:id', requireAuth, isAdmin, updateCaso);
 
-// --- RUTA NUEVA PARA CREAR CASO Y CITA DESDE COTIZACIÓN ---
+// Ruta para crear desde cotización
 router.post('/create-from-cotizacion', requireAuth, isAdmin, createCasoFromCotizacion);
 
-// --- RUTA NUEVA Y SEGURA PARA CERRAR CASO (SOLO TÉCNICOS) ---
+// Rutas de cierre
 router.patch('/:id/cerrar-manual', requireAuth, isTecnico, cerrarCasoManualTecnico);
-
 router.patch('/:id/cerrar', requireAuth, isTecnico, cerrarCaso);
-
-router.get('/:id/expediente', requireAuth, isTecnico, getDetalleTecnico);
 
 export default router;
