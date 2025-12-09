@@ -146,5 +146,5 @@ export const getCasoById = async (id) => {
 };
 
 export const getExpedienteTecnico = (id) => {
-  return crmApi.get(`/casos/${id}/expediente`);
+  return api.get(`/casos/${id}/expediente`);
 };
