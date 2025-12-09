@@ -144,3 +144,7 @@ export const getCasoById = async (id) => {
   const response = await api.get(`/casos/${id}`);
   return response.data;
 };
+
+export const getExpedienteTecnico = (id) => {
+  return crmApi.get(`/casos/${id}/expediente`);
+};

@@ -20,21 +20,16 @@ function App() {
         {/* --- RUTAS PÚBLICAS --- */}
         <Route path="/login" element={<Login />} />
 
-        {/* --- RUTA PÚBLICA "MAGIC LINK" --- 
-            La sacamos de ProtectedRoute. Es segura por el token.
-        ---*/}
-        {/* <Route path="/revision" element={<RevisionForm />} />  */}
-
-
         {/* --- RUTAS PROTEGIDAS --- */}
         <Route
-          path="/" // Set Agenda as the main protected route
+          path="/"
           element={
             <ProtectedRoute>
               <AgendaPage />
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/revision/:casoId"
           element={
@@ -43,9 +38,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* The /casos route is now deprecated, AgendaPage at root is the main view */}
 
-        {/* --- 2. NUEVA RUTA PROTEGIDA: COTIZADOR --- */}
         <Route
           path="/cotizador"
           element={
@@ -55,14 +48,12 @@ function App() {
           }
         />
 
-        {/* 2. AGREGAR LA RUTA DE SOPORTE */}
         <Route path="/soporte" element={
           <ProtectedRoute>
             <ChatSoporte />
           </ProtectedRoute>
         } />
 
-        {/* --- 3. NUEVA RUTA PROTEGIDA: FIRMA --- */}
         <Route
           path="/firma"
           element={
@@ -72,18 +63,14 @@ function App() {
           }
         />
 
-        <Route path="/soporte" element={
-          <ProtectedRoute>
-            <ChatSoporte />
-          </ProtectedRoute>
-        } />
-
         <Route path="/billetera" element={<ProtectedRoute><MiBilletera /></ProtectedRoute>} />
 
-        {/* La ruta antigua "/revision/:casoId" ya no es necesaria */}
-
+        {/* --- CORRECCIÓN CRÍTICA AQUÍ --- 
+            Cambiamos "/caso/:id" a "/detalle-caso/:id" 
+            para coincidir con DiaTimeline.jsx 
+        */}
         <Route
-          path="/caso/:id"
+          path="/detalle-caso/:id"
           element={
             <ProtectedRoute>
               <DetalleCaso />

@@ -10,7 +10,8 @@ import {
   getCasoById, // <-- CAMBIADO
   createCasoFromCotizacion,
   cerrarCasoManualTecnico,
-  cerrarCaso
+  cerrarCaso,
+  getDetalleTecnico
 } from '../controllers/casos.controller.js';
 
 const router = Router();
@@ -39,5 +40,7 @@ router.post('/create-from-cotizacion', requireAuth, isAdmin, createCasoFromCotiz
 router.patch('/:id/cerrar-manual', requireAuth, isTecnico, cerrarCasoManualTecnico);
 
 router.patch('/:id/cerrar', requireAuth, isTecnico, cerrarCaso);
+
+router.get('/:id/expediente', requireAuth, isTecnico, getDetalleTecnico);
 
 export default router;

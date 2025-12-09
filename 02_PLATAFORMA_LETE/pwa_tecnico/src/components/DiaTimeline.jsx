@@ -266,7 +266,7 @@ const DiaTimeline = ({ date }) => {
                       ) : (<div />)}
 
                       {/* 5. COTIZAR */}
-                      {(cita.caso.tipo === 'alto_consumo') ? (
+                      {(cita.caso.tipo === 'alto_consumo' || cita.caso.tipo === 'DIAGNOSTICO') ? (
                         <Link
                           to="/cotizador"
                           state={{
