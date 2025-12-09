@@ -68,6 +68,27 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
+    # 🔥 AGREGA ESTO JUSTO DEBAJO 🔥
+    # Capturar peticiones que vienen sin el prefijo "/lete" (como la App Técnica)
+    location ^~ /api/casos/ {
+        # OPCIÓN A: Si tu Node.js espera recibir "/api/casos"
+        proxy_pass http://localhost:3010; 
+        
+        # OPCIÓN B: Si tu Node.js SOLO responde a "/lete/api/casos", usa esta línea en su lugar:
+        # rewrite ^/api/casos/(.*) /lete/api/casos/$1 break;
+        # proxy_pass http://localhost:3010;
+
+        # Headers obligatorios
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
     # --- API Módulo Cotizador (PHP) ---
     location ~ ^/api/(cotizacion|cotizar|recursos|xml|admin|ia) {
         proxy_pass http://localhost:8081;
