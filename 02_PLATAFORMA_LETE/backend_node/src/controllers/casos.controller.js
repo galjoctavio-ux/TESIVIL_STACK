@@ -435,3 +435,79 @@ export const cerrarCasoManualTecnico = async (req, res) => {
     res.status(500).json({ error: 'Error interno al cerrar el caso.', details: error.message });
   }
 };
+
+// --- NUEVA FUNCIÓN: VISTA SEGURA PARA TÉCNICOS ---
+export const getDetalleTecnico = async (req, res) => {
+  const { id: casoId } = req.params;
+  const { id: tecnicoId } = req.user;
+
+  try {
+    const { data: caso, error } = await supabaseAdmin
+      .from('casos')
+      .select(`
+        id,
+        status,
+        created_at,
+        tipo_servicio,
+        descripcion_problema,
+        requiere_cotizacion,
+        cliente:clientes (
+          nombre_completo,
+          direccion_principal,
+          google_maps_link,
+          ubicacion_lat,
+          ubicacion_lng,
+          saldo_pendiente 
+        ),
+        revisiones (
+          id,
+          voltaje_medido,
+          sello_cfe,
+          tornillos_flojos,
+          resultado_deteccion_fugas,
+          created_at
+        )
+      `)
+      .eq('id', casoId)
+      // Importante: Filtramos aquí también que sea SU caso
+      .eq('tecnico_id', tecnicoId)
+      .single();
+
+    if (error) throw error;
+    if (!caso) {
+      return res.status(404).json({ message: 'Caso no encontrado o no asignado a ti.' });
+    }
+
+    // SANITIZACIÓN FINAL (Doble seguridad)
+    // Aunque el select ya filtra, reestructuramos para evitar fugas accidentales
+    const respuestaSegura = {
+      id: caso.id,
+      status: caso.status,
+      fecha: caso.created_at,
+      tipo: caso.tipo_servicio,
+      problema: caso.descripcion_problema,
+      aviso_cotizacion: caso.requiere_cotizacion,
+      cliente: {
+        nombre: caso.cliente?.nombre_completo || 'Cliente',
+        direccion: caso.cliente?.direccion_principal || 'Sin dirección',
+        maps_link: caso.cliente?.google_maps_link,
+        coordenadas: {
+          lat: caso.cliente?.ubicacion_lat,
+          lng: caso.cliente?.ubicacion_lng
+        },
+        // Muestra semáforo de saldo, pero NO datos bancarios ni historial
+        tiene_deuda: (caso.cliente?.saldo_pendiente > 0)
+      },
+      // Tomamos solo la revisión más reciente si existen varias
+      ultima_revision: caso.revisiones?.length > 0
+        ? caso.revisiones.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
+        : null
+    };
+
+    res.json(respuestaSegura);
+
+  } catch (error) {
+    console.error('Error en getDetalleTecnico:', error);
+    res.status(500).json({ message: 'Error obteniendo expediente.' });
+  }
+};

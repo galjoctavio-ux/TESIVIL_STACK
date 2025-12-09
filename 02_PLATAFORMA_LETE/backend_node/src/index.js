@@ -14,6 +14,8 @@ import agendaRoutes from './routes/agenda.routes.js';
 import clientesRoutes from './routes/clientes.routes.js';
 import finanzasRoutes from './routes/finanzas.routes.js';
 import configRoutes from './routes/config.routes.js';
+// 👇 1. AGREGA ESTA LÍNEA AQUÍ
+import integracionRoutes from './routes/integracion.routes.js';
 
 import './services/eaDatabase.js';
 
@@ -51,7 +53,8 @@ apiRouter.use('/agenda', agendaRoutes);
 apiRouter.use('/clientes', clientesRoutes);
 apiRouter.use('/finanzas', finanzasRoutes);
 apiRouter.use('/config', configRoutes); // <--- 1. AGREGAR AQUÍ (Mover de abajo hacia acá)
-
+// 👇 2. AGREGA ESTA LÍNEA AQUÍ
+apiRouter.use('/integracion', integracionRoutes);
 // ¡IMPORTANTE! Montamos nuestro router en el prefijo
 app.use('/lete/api', apiRouter);
 
