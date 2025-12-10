@@ -83,9 +83,9 @@ export const obtenerAgendaGlobal = async (req, res) => {
             const { data: casosData, error } = await supabaseAdmin
                 .from('casos')
                 .select(`
-          id, tipo_servicio,
-          cliente:clientes (nombre_completo, telefono)
-        `)
+        id, tipo_servicio,
+        cliente:clientes (nombre_completo, telefono, celular, direccion_principal, google_maps_link)
+    `) // <-- SE AGREGÓ 'celular' AQUÍ
                 .in('id', casoIds);
 
             if (error) {
@@ -103,14 +103,33 @@ export const obtenerAgendaGlobal = async (req, res) => {
         // 4. Armar respuesta (código simplificado para debug, pero funcional)
         const agenda = citas.map(cita => {
             const caso = casosMap.get(cita.caso_id);
-            let titulo = 'OCUPADO';
 
-            // Lógica de respaldo
-            if (cita.ea_cliente_nombre) titulo = `${cita.ea_cliente_nombre} ${cita.ea_cliente_apellido || ''}`;
+            // 1. Datos base
+            let titulo = cita.is_unavailable ? 'BLOQUEO / SIN DATOS' : 'OCUPADO';
+            let nombreCliente = '';
+            let celular = ''; // <--- Variable a llenar
+            let direccion = '';
+            let mapsLink = '';
+            let tipoServicio = '';
 
-            // Lógica Supabase
+            // 2. Intentar sacar datos de Easy!Appointments (Respaldo)
+            if (cita.ea_cliente_nombre) {
+                nombreCliente = `${cita.ea_cliente_nombre} ${cita.ea_cliente_apellido || ''}`.trim();
+                // Priorizar el celular de EA si existe, sino el teléfono
+                celular = cita.ea_cliente_celular || cita.ea_cliente_telefono || '';
+                direccion = cita.ea_cliente_direccion || '';
+                titulo = nombreCliente;
+            }
+
+            // 3. Si existe en Supabase, SOBREESCRIBIMOS con datos mejores (Prioridad)
             if (caso && caso.cliente) {
-                titulo = caso.cliente.nombre_completo || titulo;
+                nombreCliente = caso.cliente.nombre_completo || nombreCliente;
+                // El celular de Supabase tiene la máxima prioridad
+                celular = caso.cliente.celular || caso.cliente.telefono || celular;
+                direccion = caso.cliente.direccion_principal || direccion;
+                mapsLink = caso.cliente.google_maps_link || '';
+                titulo = nombreCliente;
+                tipoServicio = caso.tipo_servicio;
             }
 
             return {
@@ -121,7 +140,14 @@ export const obtenerAgendaGlobal = async (req, res) => {
                 // ... (resto de campos requeridos por el frontend, simplificados aquí)
                 end: dayjs(cita.start_datetime).add(1, 'hour').format('YYYY-MM-DD HH:mm:ss'), // Temporal si no trajiste end_datetime
                 type: 'appointment',
-                details: { cliente: titulo }
+                details: {
+                    cliente: nombreCliente,
+                    celular: celular, // <--- CAMPO ENVIADO AL FRONTEND
+                    direccion: direccion,
+                    mapsLink: mapsLink,
+                    tipoServicio: tipoServicio,
+                    notas: cita.notes || ''
+                }
             };
         });
 
