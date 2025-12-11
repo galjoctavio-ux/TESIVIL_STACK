@@ -139,3 +139,113 @@ export const obtenerAgendaGlobal = async (req, res) => {
         res.status(500).json({ error: 'Error interno' });
     }
 };
+
+// A) Helper para Geocodificar en el servidor (Seguridad y Precisión)
+const geocodeAddress = async (address) => {
+    const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY; // Asegúrate de tener esto en tu .env
+    if (!address || !GOOGLE_API_KEY) return null;
+
+    try {
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&components=country:MX&key=${GOOGLE_API_KEY}`;
+        const response = await axios.get(url);
+
+        if (response.data.status === 'OK' && response.data.results.length > 0) {
+            const result = response.data.results[0];
+            return {
+                lat: result.geometry.location.lat,
+                lng: result.geometry.location.lng,
+                formatted_address: result.formatted_address
+            };
+        }
+    } catch (error) {
+        console.error("Error Geocoding Server-Side:", error);
+    }
+    return null;
+};
+
+// B) Helper para Link de Google Maps
+const generateNavigationLink = (lat, lng, query) => {
+    if (lat && lng) return `http://googleusercontent.com/maps.google.com/maps?q=${lat},${lng}`;
+    return `http://googleusercontent.com/maps.google.com/maps?q=${encodeURIComponent(query)}`;
+};
+
+// C) FUNCIÓN PRINCIPAL: Actualizar Ubicación
+export const actualizarUbicacionCita = async (req, res) => {
+    const { id } = req.params; // ID de la cita
+    const { direccion } = req.body; // Dirección en texto que mandó el Frontend
+
+    if (!id || !direccion) return res.status(400).json({ error: 'Faltan datos' });
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        console.log(`📍 Procesando actualización para Cita EA ID: ${id}`);
+
+        // 1. Buscamos la cita para ver si tiene un caso_id de Supabase
+        const [rows] = await connection.execute(
+            `SELECT notas_estructuradas FROM ea_appointments WHERE id = ?`,
+            [id]
+        );
+
+        if (rows.length === 0) {
+            connection.release();
+            return res.status(404).json({ error: 'Cita no encontrada' });
+        }
+
+        // 2. Geocodificamos la dirección "bonita" que nos mandó el Frontend
+        const geoData = await geocodeAddress(direccion);
+        const direccionFinal = geoData ? geoData.formatted_address : direccion;
+        const mapLink = geoData
+            ? generateNavigationLink(geoData.lat, geoData.lng, direccionFinal)
+            : generateNavigationLink(null, null, direccionFinal);
+
+        // 3. Identificamos si hay que actualizar en Supabase
+        const notas = rows[0].notas_estructuradas ? JSON.parse(rows[0].notas_estructuradas) : {};
+
+        if (notas.caso_id) {
+            console.log(`🔄 Actualizando Caso #${notas.caso_id} en Supabase...`);
+
+            // a) Obtener cliente ligado al caso
+            const { data: casoData } = await supabaseAdmin
+                .from('casos')
+                .select('cliente_id')
+                .eq('id', notas.caso_id)
+                .single();
+
+            if (casoData && casoData.cliente_id) {
+                // b) Actualizar Cliente en Supabase
+                const { error: updateError } = await supabaseAdmin
+                    .from('clientes')
+                    .update({
+                        direccion_principal: direccionFinal,
+                        google_maps_link: mapLink
+                    })
+                    .eq('id', casoData.cliente_id);
+
+                if (updateError) throw new Error('Supabase Error: ' + updateError.message);
+                console.log("✅ Cliente Supabase actualizado.");
+            }
+        }
+
+        // 4. (Opcional) Si quieres guardar el link en las notas internas de EA también, podrías hacerlo aquí.
+        // Por ahora, con actualizar Supabase basta para que el Frontend lo lea al recargar.
+
+        await connection.commit();
+
+        // Respondemos al Frontend con éxito
+        res.json({
+            success: true,
+            message: 'Ubicación actualizada correctamente',
+            direccion: direccionFinal,
+            mapLink
+        });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('❌ Error actualizando ubicación:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    } finally {
+        if (connection) connection.release();
+    }
+};
