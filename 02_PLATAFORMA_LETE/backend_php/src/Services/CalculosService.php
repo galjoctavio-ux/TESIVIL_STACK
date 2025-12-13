@@ -652,7 +652,7 @@ class CalculosService {
         try {
             // Se intenta obtener el nombre de la tabla local 'users'. 
             // Si la arquitectura separa DBs, esto podría fallar, por lo que el catch lo maneja.
-            $sql = "SELECT nombre FROM users WHERE id_externo = ? LIMIT 1";
+            $sql = "SELECT nombre FROM ea_users WHERE id_externo = ? LIMIT 1";
             $stmt = $this->db->prepare($sql);
             $stmt->execute([$userId]);
             $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
