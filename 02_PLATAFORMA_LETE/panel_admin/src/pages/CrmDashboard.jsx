@@ -8,16 +8,11 @@ import './CrmDashboard.css';
 // Función para el semáforo de Calificación del Cliente
 const getStatusColor = (calificacion) => {
     switch (calificacion) {
-        case 'SOSPECHOSO':
-            return 'var(--red-500)'; // Rojo
-        case 'HOSTIL':
-            return 'var(--red-500)'; // Rojo
-        case 'NEUTRO':
-            return 'var(--yellow-500)'; // Amarillo
-        case 'AMABLE':
-            return 'var(--green-500)'; // Verde
-        default:
-            return 'var(--gray-400)'; // Gris para desconocido
+        case 'SOSPECHOSO': return 'var(--red-500)';
+        case 'HOSTIL': return 'var(--red-500)';
+        case 'NEUTRO': return 'var(--yellow-500)';
+        case 'AMABLE': return 'var(--green-500)';
+        default: return 'var(--gray-400)';
     }
 };
 
@@ -66,6 +61,17 @@ const renderSyncStatus = (cliente) => {
     ));
 };
 
+/**
+ * Función de seguridad para manejar textos que pueden ser nulos y cortarlos.
+ */
+const safeText = (text, limit = 100) => {
+    if (!text) return '...';
+    // Nos aseguramos que sea un string antes de cortar
+    const str = String(text);
+    return str.length > limit ? str.substring(0, limit) + '...' : str;
+};
+
+
 // --- COMPONENTE PRINCIPAL ---
 
 const CrmDashboard = () => {
@@ -85,11 +91,12 @@ const CrmDashboard = () => {
     const cargarDatos = async () => {
         setLoading(true);
         try {
-            // El backend ahora devuelve los datos enriquecidos (cruzados con MariaDB y lógica)
             const data = await getCrmDashboard();
-            setClientes(data);
+            // Manejamos el caso de que data no sea un array
+            setClientes(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error("Error cargando CRM:", error);
+            setClientes([]);
         } finally {
             setLoading(false);
         }
@@ -101,33 +108,28 @@ const CrmDashboard = () => {
 
     // --- LÓGICA DE FILTRADO Y ORDENAMIENTO (useMemo) ---
     const clientesFiltrados = useMemo(() => {
-        let resultados = clientes;
+        let resultados = [...clientes]; // Usar copia segura
 
         // 1. Aplicar filtro de búsqueda de texto
         if (busqueda) {
             const lowerBusqueda = busqueda.toLowerCase();
             resultados = resultados.filter(cliente =>
-                cliente.nombre_completo?.toLowerCase().includes(lowerBusqueda) ||
-                cliente.telefono?.includes(lowerBusqueda) ||
-                cliente.ai_summary?.toLowerCase().includes(lowerBusqueda) ||
-                cliente.crm_status?.toLowerCase().includes(lowerBusqueda)
+                (cliente.nombre_completo || '').toLowerCase().includes(lowerBusqueda) ||
+                (cliente.telefono || '').includes(lowerBusqueda) ||
+                (cliente.ai_summary || '').toLowerCase().includes(lowerBusqueda) ||
+                (cliente.crm_status || '').toLowerCase().includes(lowerBusqueda)
             );
         }
 
         // 2. Aplicar filtro de pestaña (TODOS, ALERTA, etc.)
         if (filtro === 'ALERTA') {
-            // Un cliente tiene ALERTA si:
-            // 1. Debe Cotización
-            // 2. O si la IA detectó CITA pero no hay registro en EA
-            // 3. O si el status del CRM es 'QUOTE_FOLLOWUP' (Seguimiento de Cotización)
             resultados = resultados.filter(cliente =>
                 cliente.debe_cotizacion ||
                 cliente.alerta_cita_desincronizada ||
                 cliente.crm_intent === 'QUOTE_FOLLOWUP'
             );
         } else if (filtro !== 'TODOS') {
-            // Aquí puedes agregar otros filtros si es necesario (ej. SOLO_TECNICOS, SOLO_ADMIN)
-            // Por ahora, solo tenemos TODOS y ALERTA
+            // Se puede agregar lógica para otros filtros si se definen más pestañas
         }
 
 
@@ -158,7 +160,6 @@ const CrmDashboard = () => {
     }, [clientesFiltrados, paginaActual, itemsPorPagina]);
 
     useEffect(() => {
-        // Aseguramos que si cambia el filtro o búsqueda, volvemos a la pág. 1
         setPaginaActual(1);
     }, [filtro, busqueda]);
 
@@ -171,7 +172,7 @@ const CrmDashboard = () => {
                 direction: prev.direction === 'asc' ? 'desc' : 'asc'
             }));
         } else {
-            setOrden({ key, direction: 'desc' }); // Por defecto, ordenar descendente
+            setOrden({ key, direction: 'desc' });
         }
     };
 
@@ -224,7 +225,7 @@ const CrmDashboard = () => {
                                 </th>
                                 <th>Datos del Cliente</th>
                                 <th>AI Summary (Intent)</th>
-                                <th>Status Operativo</th> {/* NUEVA COLUMNA */}
+                                <th>Status Operativo</th>
                                 <th onClick={() => handleSort('unread_count')}>
                                     No Leídos {renderSortIndicator('unread_count')}
                                 </th>
@@ -236,9 +237,9 @@ const CrmDashboard = () => {
                                 <tr key={cliente.id}>
                                     {/* 1. Última Interacción */}
                                     <td>
-                                        {new Date(cliente.last_interaction).toLocaleString('es-MX', {
+                                        {cliente.last_interaction ? new Date(cliente.last_interaction).toLocaleString('es-MX', {
                                             day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-                                        })}
+                                        }) : '-'}
                                         <div style={{ fontSize: '0.8em', color: getStatusColor(cliente.calificacion_semaforo) }}>
                                             ● {cliente.calificacion_semaforo || 'N/A'}
                                         </div>
@@ -259,20 +260,20 @@ const CrmDashboard = () => {
                                                 )}
                                             </div>
                                         )}
-                                        {cliente.saldo_pendiente > 0 && (
+                                        {(cliente.saldo_pendiente > 0) && (
                                             <div style={{ color: 'var(--red-500)', fontWeight: 'bold' }}>
-                                                Saldo Pndte: ${cliente.saldo_pendiente.toFixed(2)}
+                                                Saldo Pndte: ${Number(cliente.saldo_pendiente).toFixed(2)}
                                             </div>
                                         )}
                                     </td>
 
-                                    {/* 3. AI Summary (Intent) */}
+                                    {/* 3. AI Summary (Intent) - CORREGIDO */}
                                     <td>
-                                        <div className={`crm-status-badge status-${cliente.crm_status}`}>
-                                            {cliente.crm_status}
+                                        <div className={`crm-status-badge status-${cliente.crm_status || 'NONE'}`}>
+                                            {cliente.crm_status || 'NONE'}
                                         </div>
-                                        <div className="ai-summary-text" title={cliente.ai_summary}>
-                                            {cliente.ai_summary.substring(0, 100)}...
+                                        <div className="ai-summary-text" title={safeText(cliente.ai_summary, 500)}>
+                                            {safeText(cliente.ai_summary)}
                                         </div>
                                     </td>
 
