@@ -1,76 +1,70 @@
 import { db } from '../db';
-import api from '../apiService';
+import api, { guardarCotizacion } from '../apiService'; // Importamos guardarCotizacion
 
 class SyncManager {
     constructor() {
         this.isSyncing = false;
-        // Escuchar eventos de red
-        window.addEventListener('online', () => this.procesarCola());
+        if (typeof window !== 'undefined') {
+            window.addEventListener('online', () => {
+                console.log('[SyncManager] Conexión detectada. Procesando cola...');
+                this.procesarCola();
+            });
+        }
     }
 
-    /**
-     * Revisa si hay algo pendiente en la base de datos local y lo sube.
-     */
     async procesarCola() {
         if (this.isSyncing || !navigator.onLine) return;
 
         const pendientes = await db.cola_sincronizacion
             .where('status')
-            .equals('pending')
+            .anyOf('pending', 'error')
             .toArray();
 
         if (pendientes.length === 0) return;
 
         this.isSyncing = true;
-        console.log(`[SyncManager] Intentando subir ${pendientes.length} reportes...`);
+        console.log(`[SyncManager] Procesando ${pendientes.length} elementos...`);
 
         for (const tarea of pendientes) {
             try {
-                // Marcamos como "subiendo"
                 await db.cola_sincronizacion.update(tarea.id, { status: 'uploading' });
 
-                // --- EL ENVÍO REAL AL BACKEND ---
-                // Usamos tu endpoint existente.
-                const { equiposData, firmaBase64, ...revisionData } = tarea.payload;
+                // --- ENRUTAMIENTO INTELIGENTE ---
+                if (tarea.tipo === 'cotizacion') {
+                    // Lógica para Cotizaciones
+                    console.log("Subiendo Cotización...");
+                    await guardarCotizacion(tarea.payload); // Usamos tu función existente
 
-                // Reconstruimos el payload tal cual lo espera tu backend
-                const payloadFinal = {
-                    revisionData,
-                    equiposData: equiposData || [],
-                    firmaBase64
-                };
+                } else if (tarea.tipo === 'revision' || !tarea.tipo) {
+                    // Lógica para Revisiones (Compatibilidad con lo anterior)
+                    console.log("Subiendo Revisión...");
+                    const { equiposData, firmaBase64, ...revisionData } = tarea.payload;
+                    const payloadFinal = {
+                        revisionData,
+                        equiposData: equiposData || [],
+                        firmaBase64
+                    };
+                    await api.post('/revisiones', payloadFinal);
+                }
 
-                await api.post('/revisiones', payloadFinal);
-
-                // Si llegamos aquí, fue éxito.
-                console.log(`[SyncManager] Reporte ${tarea.caso_id} subido con éxito.`);
-
-                // Eliminamos de la cola o marcamos como success
-                await db.cola_sincronizacion.update(tarea.id, { status: 'success' });
-                // Opcional: Eliminarlo físicamente para ahorrar espacio
-                await db.cola_sincronizacion.delete(tarea.id);
-
-                // TODO: Aquí podrías lanzar una Notificación Push Local avisando al técnico
+                console.log(`[SyncManager] Elemento ${tarea.id} (${tarea.tipo}) subido con éxito.`);
+                await db.cola_sincronizacion.delete(tarea.id); // Limpieza
 
             } catch (error) {
-                console.error(`[SyncManager] Error subiendo reporte ${tarea.caso_id}:`, error);
-
-                // Si falló, incrementamos reintentos y lo dejamos en pending para la próxima
+                console.error(`[SyncManager] Error subiendo ${tarea.tipo}:`, error);
                 await db.cola_sincronizacion.update(tarea.id, {
-                    status: 'pending',
-                    retry_count: tarea.retry_count + 1,
-                    last_error: error.message
+                    status: 'error',
+                    retry_count: (tarea.retry_count || 0) + 1,
+                    last_error: error.message || 'Error desconocido'
                 });
             }
         }
 
         this.isSyncing = false;
 
-        // Si quedaron pendientes (porque fallaron), reintentar en 1 minuto
-        const aunPendientes = await db.cola_sincronizacion.where('status').equals('pending').count();
-        if (aunPendientes > 0) {
-            setTimeout(() => this.procesarCola(), 60000);
-        }
+        // Reintentar errores
+        const errores = await db.cola_sincronizacion.where('status').equals('error').count();
+        if (errores > 0) setTimeout(() => this.procesarCola(), 60000); // 1 min
     }
 }
 
