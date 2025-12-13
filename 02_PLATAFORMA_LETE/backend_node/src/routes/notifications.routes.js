@@ -12,16 +12,22 @@ router.post('/subscribe', subscribeUser);
 router.post('/send-by-email', async (req, res) => {
     const { email, payload } = req.body;
 
+    console.log('📨 [NODE] Petición recibida desde PHP');
+    console.log('   -> Email destino:', email);
+    console.log('   -> Payload:', payload);
+
     if (!email || !payload) {
-        return res.status(400).json({ message: 'Faltan datos (email o payload)' });
+        console.error('❌ [NODE] Faltan datos en la petición');
+        return res.status(400).json({ message: 'Faltan datos' });
     }
 
     try {
         await sendNotificationToEmail(email, payload);
-        res.status(200).json({ success: true, message: 'Notificación procesada' });
+        console.log('✅ [NODE] Proceso de envío finalizado (Revisa si hubo warnings en el controlador)');
+        res.status(200).json({ success: true });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error interno enviando push' });
+        console.error('🔥 [NODE] Error crítico al procesar notificación:', error);
+        res.status(500).json({ error: 'Error interno' });
     }
 });
 
