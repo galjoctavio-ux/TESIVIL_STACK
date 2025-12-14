@@ -50,7 +50,7 @@ export const getCrmDashboardV2 = async (req, res) => {
             FROM ea_appointments a
             LEFT JOIN ea_users c ON a.id_users_customer = c.id
             LEFT JOIN ea_users p ON a.id_users_provider = p.id
-            WHERE a.start_datetime >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            WHERE a.start_datetime >= DATE_SUB(NOW(), INTERVAL 1 YEAR)
         `;
 
         const [citasMaria] = await pool.execute(queryMaria);
