@@ -1,0 +1,277 @@
+/* src/pages/CrmDashboard.css */
+
+/* --- GENERAL & HEADER --- */
+.crm-dashboard {
+    padding: 20px;
+    background-color: #f8fafc;
+    /* Color de fondo muy claro (similar a Tailwind's slate-50) */
+    min-height: 90vh;
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.dashboard-header h2 {
+    color: #1e293b;
+    /* Texto oscuro */
+    font-size: 1.8rem;
+    font-weight: 600;
+}
+
+/* --- FILTROS Y BÚSQUEDA --- */
+.dashboard-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 25px;
+    padding: 15px;
+    background-color: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    /* Sombra ligera */
+}
+
+.dashboard-controls input[type="text"],
+.dashboard-controls select {
+    padding: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 1em;
+    flex: 1;
+    min-width: 150px;
+    max-width: 350px;
+    /* Limitar el ancho del input de búsqueda */
+}
+
+/* --- ESTADO DE CARGA --- */
+.loading-indicator {
+    text-align: center;
+    padding: 50px;
+    font-size: 1.2em;
+    color: #64748b;
+}
+
+/* --- GRID DE CLIENTES (En lugar de tabla pura) --- */
+.clientes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    /* Mínimo 320px de ancho por tarjeta */
+    gap: 20px;
+}
+
+/* --- TARJETA DE CLIENTE (CARD) --- */
+.cliente-card {
+    background-color: #ffffff;
+    border-radius: 10px;
+    /* Sombra más profesional */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border-left: 5px solid;
+    /* Usaremos esto para el color de integridad (el semáforo) */
+}
+
+.cliente-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.card-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 2px;
+}
+
+.card-subtitle {
+    font-size: 0.9em;
+    color: #64748b;
+}
+
+/* --- BADGES/ETIQUETAS (INTENT) --- */
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    /* Evita que el badge se extienda si no cabe */
+    flex-shrink: 0;
+}
+
+.badge-intent {
+    background-color: #e0f2fe;
+    color: #0284c7;
+    /* Azul para intención alta */
+}
+
+.badge-intent-none {
+    background-color: #f1f5f9;
+    color: #64748b;
+    /* Gris para intención nula */
+}
+
+/* --- SECCIÓN DE DETALLES --- */
+.card-details {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 15px;
+}
+
+.detail-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+    color: #475569;
+}
+
+.detail-row svg {
+    color: #3b82f6;
+    /* Icono azul por defecto */
+    min-width: 16px;
+}
+
+/* --- INTEGRIDAD (COLOR BORDER Y TEXTO) --- */
+.status-OK {
+    border-left-color: #10b981;
+}
+
+/* Verde - Sincronizado */
+.status-MANUAL {
+    border-left-color: #f59e0b;
+}
+
+/* Naranja - Agendado Manual */
+.status-ERROR_GHOST {
+    border-left-color: #ef4444;
+}
+
+/* Rojo - Cita Fantasma */
+
+.status-label {
+    font-weight: 700;
+    padding: 2px 0;
+}
+
+.status-label.OK {
+    color: #10b981;
+}
+
+.status-label.MANUAL {
+    color: #f59e0b;
+}
+
+.status-label.ERROR_GHOST {
+    color: #ef4444;
+}
+
+/* --- RESUMEN IA / ACCIÓN (FOOTER) --- */
+.card-footer {
+    border-top: 1px solid #f1f5f9;
+    padding-top: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ai-summary-snippet {
+    font-size: 0.8em;
+    color: #64748b;
+    font-style: italic;
+    flex-grow: 1;
+    margin-right: 10px;
+    /* Limitar el espacio del resumen */
+    max-height: 38px;
+    overflow: hidden;
+    line-height: 1.3;
+}
+
+.btn-action {
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color 0.2s;
+    /* Estilo específico para la acción de revisión */
+    white-space: nowrap;
+}
+
+.btn-action:hover {
+    background-color: #2563eb;
+}
+
+/* --- PAGINACIÓN --- */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px 0;
+    gap: 15px;
+}
+
+.tab-btn {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    padding: 8px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-weight: 500;
+}
+
+.tab-btn:hover:not(:disabled) {
+    background-color: #f1f5f9;
+}
+
+.tab-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 768px) {
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .dashboard-controls {
+        flex-direction: column;
+    }
+
+    .clientes-grid {
+        grid-template-columns: 1fr;
+        /* Una sola columna en móvil */
+    }
+
+    .card-header {
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .badge {
+        align-self: flex-start;
+        margin-left: 0;
+    }
+}

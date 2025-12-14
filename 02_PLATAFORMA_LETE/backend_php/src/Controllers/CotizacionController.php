@@ -75,8 +75,8 @@ class CotizacionController {
                 'telefono' => $input['cliente_telefono'] ?? null
             ];
 
-            $nombreAsesorDesdeBD = $this->calculosService->obtenerNombreUsuarioPorId($input['tecnico_id']);
-            $tecnicoNombreFinal = $nombreAsesorDesdeBD ?? $input['tecnico_nombre'] ?? 'Asesor de Servicio';
+            //$nombreAsesorDesdeBD = $this->calculosService->obtenerNombreUsuarioPorId($input['tecnico_id']);
+           $tecnicoNombreFinal = $input['tecnico_nombre'] ?? 'Asesor de Servicio'; // <-- USAR DIRECTO EL INPUT
             
             $guardadoResult = $this->calculosService->guardarCotizacion(
                 $resultado,
@@ -106,9 +106,25 @@ class CotizacionController {
 
             $this->db->commit();
 
+            // --- INICIO AGREGADO NOTIFICACIÓN PUSH ---
+            // Le avisamos al técnico que su cotización ya se procesó y se generó el PDF
+            try {
+                $msgPush = "Cliente: " . ($clienteData['nombre'] ?? 'Desconocido');
+                $this->notificarTecnicoNode(
+                    $input['tecnico_id'], // El email del técnico viene aquí
+                    "✅ Cotización Exitosa", 
+                    $msgPush,
+                    "/historial" // URL a donde quieres que vaya al hacer click
+                );
+            } catch (Exception $e) {
+                error_log("No se pudo enviar push: " . $e->getMessage());
+            }
+            // --- FIN AGREGADO ---
+
             if ($estado === 'ENVIADA') {
                 $resendService = new ResendService();
-                $resendService->enviarCotizacion($uuid, $input['cliente_email'], $clienteData['nombre'], $cotizacionId);
+                $idParaEnvio = $cotizacionId ? (int)$cotizacionId : null; // Aseguramos que sea int o null
+                $resendService->enviarCotizacion($uuid, $input['cliente_email'], $clienteData['nombre'], $idParaEnvio);
                 $mensajeRespuesta = 'Cotización enviada correctamente al cliente.';
             } else {
                 $mensajeRespuesta = '🛑 Cotización DETENIDA para revisión administrativa. Razón: ' . $razonDetencion;
@@ -476,5 +492,44 @@ class CotizacionController {
          http_response_code(501);
          echo json_encode(['error' => 'Not implemented yet']);
     }
-}
+
+    // ==========================================
+    // 6. AUXILIAR: PUSH NOTIFICATIONS (PHP -> NODE)
+    // ==========================================
+    private function notificarTecnicoNode(string $emailTecnico, string $titulo, string $mensaje, string $urlDestino = '/'): void {
+        // 1. Define la URL de tu servidor Node.js
+        // Asegúrate de que este puerto (ej. 3000 o 4000) sea el correcto donde corre tu Node.js
+        $urlNode = 'http://localhost:3001/lete/api/notifications/send-by-email'; 
+
+        $data = [
+            'email' => $emailTecnico,
+            'payload' => [
+                'title' => $titulo,
+                'body'  => $mensaje,
+                'url'   => $urlDestino
+            ]
+        ];
+
+        // 2. Iniciar cURL para hacer la petición POST
+        $ch = curl_init($urlNode);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            // 'x-api-key: TU_CLAVE_SECRETA' // Opcional: si proteges tu endpoint de Node
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 2); // Timeout corto para no frenar a PHP si Node tarda
+
+        // 3. Ejecutar (No nos importa mucho la respuesta, solo que se envíe)
+        $response = curl_exec($ch);
+        if (curl_errno($ch)) {
+            error_log("Error enviando notificación a Node: " . curl_error($ch));
+        }
+        curl_close($ch);
+    }
+} // Fin de la clase CotizacionController
+
+
+
 ?>

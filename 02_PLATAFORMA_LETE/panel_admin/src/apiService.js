@@ -291,3 +291,26 @@ export const deleteCaso = async (id) => {
   const response = await api.delete(`/casos/${id}`);
   return response.data;
 };
+
+
+// Función que consulta el DASHBOARD CRM V1 (Dejamos la original por seguridad)
+export const getCrmDashboard = async () => {
+  const response = await api.get('/clientes/admin-dashboard');
+  return response.data;
+};
+
+// Función NUEVA que consulta el DASHBOARD CRM V2 (El Cerebro Unificado)
+export const getCrmDashboardV2 = async () => {
+  const response = await api.get('/clientes/admin-dashboard-v2');
+  return response.data.data; // Nota: El nuevo controlador devuelve { data: [...] }, por eso apuntamos a .data.data
+};
+
+export const forceAnalyze = async (clientId) => {
+  const response = await api.patch(`/clientes/${clientId}/force-analyze`);
+  return response.data;
+};
+
+export const getChatHistory = async (clientId) => {
+  const response = await api.get(`/clientes/${clientId}/chat`);
+  return response.data;
+};

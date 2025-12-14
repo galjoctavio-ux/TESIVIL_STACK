@@ -164,25 +164,31 @@ export const sendAdminNotification = async (req, res) => {
 // --- AGREGA ESTA NUEVA FUNCIÓN ---
 export const sendNotificationToEmail = async (email, payload) => {
     try {
-        if (!email) {
-            console.warn('[Push] No se proporcionó email para enviar notificación.');
-            return;
-        }
+        console.log(`🔎 [PUSH] Buscando usuario por email: ${email}`);
 
-        // 1. Traducir Email (Supabase) -> ID Numérico (MySQL/Legacy)
+        // 1. Traducir Email -> ID
         const [users] = await pool.query('SELECT id FROM ea_users WHERE email = ?', [email]);
 
         if (users.length === 0) {
-            console.warn(`[Push] El usuario con email ${email} no existe en la tabla ea_users (MySQL).`);
+            console.warn(`⚠️ [PUSH] Usuario NO encontrado en tabla ea_users. Email: ${email}`);
             return;
         }
 
         const userId = users[0].id;
+        console.log(`👤 [PUSH] Usuario encontrado. ID: ${userId}`);
 
-        // 2. Reutilizar la lógica existente enviando al ID numérico
-        await sendNotificationToUser(userId, payload);
+        // 2. Buscar suscripciones
+        const [subs] = await pool.query('SELECT * FROM ea_push_subscriptions WHERE user_id = ?', [userId]);
+        console.log(`📱 [PUSH] Dispositivos encontrados: ${subs.length}`);
+
+        if (subs.length === 0) {
+            console.warn(`⚠️ [PUSH] El usuario ${userId} existe, pero NO tiene dispositivos registrados.`);
+            return;
+        }
+
+        // ... (resto del código de envío) ...
 
     } catch (error) {
-        console.error(`[Push] Error al enviar notificación a ${email}:`, error.message);
+        console.error(`🔥 [PUSH] Error en sendNotificationToEmail:`, error.message);
     }
 };

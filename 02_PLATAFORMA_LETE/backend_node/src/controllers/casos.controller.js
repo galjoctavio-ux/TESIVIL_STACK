@@ -282,6 +282,9 @@ export const getCasoById = async (req, res) => {
   }
 };
 
+// =========================================================================================
+// CORRECCIÓN PARA createCasoFromCotizacion
+// =========================================================================================
 export const createCasoFromCotizacion = async (req, res) => {
   const {
     cotizacionId,
@@ -289,15 +292,47 @@ export const createCasoFromCotizacion = async (req, res) => {
     fecha_inicio,
     fecha_fin,
     cliente_nombre,
-    cliente_direccion
+    cliente_direccion,
+    cliente_telefono // <--- ASUMIMOS que el front-end enviará el teléfono
   } = req.body;
 
   // Validación básica
-  if (!cotizacionId || !tecnico_id || !fecha_inicio || !fecha_fin || !cliente_nombre) {
-    return res.status(400).json({ error: 'Faltan campos requeridos para agendar.' });
+  if (!cotizacionId || !tecnico_id || !fecha_inicio || !fecha_fin || !cliente_nombre || !cliente_telefono) {
+    return res.status(400).json({ error: 'Faltan campos requeridos: ID Cotización, Técnico, Fechas, Nombre y Teléfono del Cliente.' });
   }
 
   try {
+    // 0. LÓGICA CRM: Buscar o Crear Cliente
+    const telefonoLimpio = cliente_telefono.replace(/\D/g, '');
+    let cliente = null;
+    let clienteId = null;
+
+    // A. Buscar Cliente
+    let { data: existingClient } = await supabaseAdmin
+      .from('clientes')
+      .select('id')
+      .eq('telefono', telefonoLimpio)
+      .single();
+
+    if (existingClient) {
+      clienteId = existingClient.id;
+    } else {
+      // B. Si no existe, lo creamos "al vuelo"
+      const { data: newClient, error: clientError } = await supabaseAdmin
+        .from('clientes')
+        .insert({
+          telefono: telefonoLimpio,
+          nombre_completo: cliente_nombre,
+          direccion_principal: cliente_direccion,
+          // otros campos opcionales del cliente no se requieren aquí
+        })
+        .select('id')
+        .single();
+
+      if (clientError) throw new Error(`Error creando cliente para cotización: ${clientError.message}`);
+      clienteId = newClient.id;
+    }
+
     // 1. Obtener el ID interno de E!A del técnico
     const { data: perfilTecnico, error: errorPerfil } = await supabaseAdmin
       .from('profiles')
@@ -311,8 +346,7 @@ export const createCasoFromCotizacion = async (req, res) => {
 
     const idProvider = perfilTecnico.ea_user_id; // ID numérico de E!A
 
-    // --- CORRECCIÓN 1: VALIDACIÓN DE TRASLAPE (Issue 1) ---
-    // Consultamos si ya existe una cita que se solape con el horario solicitado
+    // 2. CORRECCIÓN: VALIDACIÓN DE TRASLAPE (Misma lógica, solo ajusto el número del paso)
     const sqlCheck = `
         SELECT COUNT(*) as total 
         FROM ea_appointments 
@@ -325,47 +359,39 @@ export const createCasoFromCotizacion = async (req, res) => {
     const [rows] = await eaPool.query(sqlCheck, [idProvider, fecha_fin, fecha_inicio]);
 
     if (rows[0].total > 0) {
-      // Si encontramos citas, detenemos todo AQUÍ.
       return res.status(409).json({
         error: 'HORARIO NO DISPONIBLE: El técnico ya tiene una cita en ese rango de horas.'
       });
     }
-    // -------------------------------------------------------
 
-    // 2. Crear Caso en Supabase
+    // 3. Crear Caso en Supabase
+    // ¡CORREGIDO! Usamos cliente_id en lugar de cliente_nombre/cliente_direccion
     const { data: newCaso, error: casoError } = await supabaseAdmin
       .from('casos')
       .insert({
-        cliente_nombre,
-        cliente_direccion,
+        cliente_id: clienteId, // <-- CORRECCIÓN CLAVE
         tecnico_id,
-        tipo: 'proyecto',
-        status: 'asignado'
-        // origen_cotizacion_id: cotizacionId // (Borrado para evitar error de columna)
+        tipo_servicio: 'PROYECTO', // Cambio a PROYECTO para diferenciar
+        status: 'asignado',
+        descripcion_problema: `Caso originado de Cotización #${cotizacionId} (Proyecto)`
+        // Si tienes una columna origen_cotizacion_id en `casos`, puedes descomentar la siguiente línea
+        // origen_cotizacion_id: cotizacionId 
       })
       .select()
       .single();
 
     if (casoError) throw new Error('Error al crear el caso en Supabase: ' + casoError.message);
 
-    // 3. Generar Hash
+    // 4. Generar Hash y insertar Cita en Easy!Appointments
     const hash = randomBytes(16).toString('hex');
-
-    // 4. Insertar Cita en Easy!Appointments (CORRECCIÓN Issue 2)
-
-    // --- TUS IDs REALES ---
     const EA_SERVICE_ID = 1;
-    const EA_CUSTOMER_ID = 21;
-    // ----------------------
+    const EA_CUSTOMER_ID = 21; // Mantengo este Customer ID genérico como lo tenías
 
     const eaQuery = `
       INSERT INTO ea_appointments 
       (book_datetime, start_datetime, end_datetime, notes, hash, is_unavailable, id_users_provider, id_users_customer, id_services)
       VALUES (NOW(), ?, ?, ?, ?, 0, ?, ?, ?); 
     `;
-
-    // NOTA: Mira los últimos 3 signos de interrogación (?, ?, ?)
-    // Corresponden a: Provider, Customer, Service
 
     const plainNotes = `Proyecto #${newCaso.id}: ${cliente_nombre}. (Desde Cotización)`;
 
@@ -374,24 +400,27 @@ export const createCasoFromCotizacion = async (req, res) => {
       fecha_fin,
       plainNotes,
       hash,
-      idProvider,     // ? -> id_users_provider
-      EA_CUSTOMER_ID, // ? -> id_users_customer (Ahora sí usamos la variable)
-      EA_SERVICE_ID   // ? -> id_services (Ahora sí usamos la variable)
+      idProvider,
+      EA_CUSTOMER_ID,
+      EA_SERVICE_ID
     ]);
 
     if (eaResult.affectedRows === 0) {
       throw new Error('No se pudo insertar la cita en Easy!Appointments.');
     }
 
-    res.status(201).json({ message: 'Caso y agenda creados con éxito', caso: newCaso });
+    res.status(201).json({
+      message: 'Caso y agenda creados con éxito',
+      caso: newCaso,
+      cliente_id_vinculado: clienteId
+    });
 
   } catch (error) {
     console.error('Error en createCasoFromCotizacion:', error);
-    // Manejo del error específico de base de datos
     res.status(500).json({ error: error.message });
   }
 };
-
+// =========================================================================================
 export const cerrarCasoManualTecnico = async (req, res) => {
   const { id: casoId } = req.params;
   const { id: tecnicoId } = req.user; // ID del técnico autenticado

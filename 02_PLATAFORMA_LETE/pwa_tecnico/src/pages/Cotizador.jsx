@@ -1,26 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import api, { guardarCotizacion, crearRecursoTecnico, obtenerSugerenciasIA, obtenerRecursos } from '../apiService';
+import { crearRecursoTecnico, obtenerSugerenciasIA, obtenerRecursos } from '../apiService';
 
-// --- Componente ModalCrear (Con arreglos visuales) ---
+// --- IMPORTS PARA MODO OFFLINE ---
+import { guardarBorrador, obtenerBorrador, eliminarBorrador, encolarParaEnvio } from '../db';
+import { syncManager } from '../services/SyncManager';
+
+// Clave única para guardar el borrador de este formulario
+const DRAFT_KEY = 'cotizacion_activa';
+
+// --- Componente ModalCrear (Sin cambios, tal cual lo tenías) ---
 const ModalCrear = ({ alCerrar, alGuardar }) => {
   const [nombre, setNombre] = useState('');
   const [unidad, setUnidad] = useState('');
-  const [precioTotal, setPrecioTotal] = useState(''); // <-- CAMBIADO
+  const [precioTotal, setPrecioTotal] = useState('');
 
   const handleGuardar = async () => {
-    if (!nombre || !unidad || !precioTotal) return alert("Completa todos los campos"); // <-- CAMBIADO
+    if (!nombre || !unidad || !precioTotal) return alert("Completa todos los campos");
     try {
       // Llamamos a la API con el precio total
-      const res = await crearRecursoTecnico(nombre, unidad, parseFloat(precioTotal)); // <-- CAMBIADO
+      const res = await crearRecursoTecnico(nombre, unidad, parseFloat(precioTotal));
       if (res.status === 'success') {
         alGuardar(res.data);
       } else {
         alert("Error: " + res.error);
       }
     } catch (err) {
-      alert("Error de conexión al crear");
+      alert("Error de conexión al crear. Intenta cuando tengas internet.");
     }
   };
 
@@ -40,9 +47,9 @@ const ModalCrear = ({ alCerrar, alGuardar }) => {
         <input type="text" value={unidad} onChange={e => setUnidad(e.target.value)} placeholder="Unidad (pza, m...)" style={inputModalStyle} />
         <input
           type="number"
-          value={precioTotal} // <-- CAMBIADO
-          onChange={e => setPrecioTotal(e.target.value)} // <-- CAMBIADO
-          placeholder="Precio Total (con IVA)" // <-- CAMBIADO
+          value={precioTotal}
+          onChange={e => setPrecioTotal(e.target.value)}
+          placeholder="Precio Total (con IVA)"
           style={inputModalStyle}
         />
 
@@ -59,16 +66,17 @@ const Cotizador = () => {
   const { user } = useAuth();
   const navigate = useNavigate(); // Hook para navegar atrás
   const location = useLocation();
+
+  // Estados de Datos
   const [casoId, setCasoId] = useState(null);
-
-  const [catalogo, setCatalogo] = useState([]);
-  const [loading, setLoading] = useState(true);
-
   const [clienteNombre, setClienteNombre] = useState('');
   const [clienteEmail, setClienteEmail] = useState('');
   const [clienteDireccion, setClienteDireccion] = useState('');
   const [clienteTelefono, setClienteTelefono] = useState('');
 
+  // Estados de UI y Carrito
+  const [catalogo, setCatalogo] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [sugerencias, setSugerencias] = useState([]);
   const [materialSeleccionado, setMaterialSeleccionado] = useState(null);
@@ -82,50 +90,90 @@ const Cotizador = () => {
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  const [resultadoEnvio, setResultadoEnvio] = useState(null);
+
+  // Estado para saber si ya cargamos la BD local
+  const [isLoadedFromDB, setIsLoadedFromDB] = useState(false);
 
   // IA
   const [aiSugerencias, setAiSugerencias] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
 
+  // 1. CARGA INICIAL (Catálogo + Borrador Local + Navegación)
   useEffect(() => {
-    if (location.state) {
-      const { casoId, clienteNombre, clienteDireccion, clienteTelefono } = location.state;
-      if (casoId) {
-        setCasoId(casoId);
-      }
-      if (clienteNombre) {
-        setClienteNombre(clienteNombre);
-      }
-      if (clienteDireccion) {
-        setClienteDireccion(clienteDireccion);
-      }
-      if (clienteTelefono) {
-        setClienteTelefono(clienteTelefono);
-      }
-    }
-  }, [location.state]);
-
-  useEffect(() => {
-    const fetchRecursos = async () => {
+    const init = async () => {
+      // A) Intentar cargar catálogo (si falla, no rompe la app)
       try {
-        const res = await obtenerRecursos(); // <-- ¡CORRECTO!
-
-        if (res.status === 'success') { // La respuesta de fetch ya viene como JSON
+        const res = await obtenerRecursos();
+        if (res.status === 'success') {
           setCatalogo(res.data);
-        } else {
-          setError("Error al cargar el catálogo de recursos.");
         }
       } catch (err) {
-        setError("Error de conexión al cargar catálogo.");
+        console.warn("Offline: No se pudo cargar catálogo. Usando versión cacheada si existe.");
       } finally {
         setLoading(false);
       }
-    };
-    fetchRecursos();
-  }, []);
 
-  // --- FUNCIÓN MANUAL DE IA (Ahorro de Tokens) ---
+      // B) Cargar Borrador guardado en IndexedDB
+      try {
+        const borrador = await obtenerBorrador(DRAFT_KEY);
+        // Solo restauramos el borrador si NO venimos de una redirección con datos nuevos (location.state)
+        if (borrador && borrador.data && !location.state) {
+          const d = borrador.data;
+          setCasoId(d.casoId || null);
+          setClienteNombre(d.clienteNombre || '');
+          setClienteEmail(d.clienteEmail || '');
+          setClienteDireccion(d.clienteDireccion || '');
+          setClienteTelefono(d.clienteTelefono || '');
+          setItemsCarrito(d.itemsCarrito || []);
+          setMoItems(d.moItems || []);
+          console.log("✅ Borrador restaurado desde celular");
+        }
+      } catch (e) {
+        console.error("Error leyendo borrador:", e);
+      }
+
+      // Marcamos que ya terminamos de cargar de la BD
+      setIsLoadedFromDB(true);
+    };
+
+    init();
+  }, []); // Se ejecuta solo una vez al montar
+
+  // 2. PROCESAR DATOS DE NAVEGACIÓN (Prioridad sobre borrador)
+  useEffect(() => {
+    // Esperamos a que la carga de BD termine para no sobrescribir incorrectamente
+    if (location.state && isLoadedFromDB) {
+      const { casoId, clienteNombre, clienteDireccion, clienteTelefono } = location.state;
+      if (casoId) setCasoId(casoId);
+      if (clienteNombre) setClienteNombre(clienteNombre);
+      if (clienteDireccion) setClienteDireccion(clienteDireccion);
+      if (clienteTelefono) setClienteTelefono(clienteTelefono);
+    }
+  }, [location.state, isLoadedFromDB]);
+
+  // 3. AUTO-GUARDADO (Guarda en local cada vez que cambia algo)
+  useEffect(() => {
+    if (!isLoadedFromDB) return; // No guardar hasta haber cargado
+
+    const timer = setTimeout(() => {
+      const datosActuales = {
+        casoId,
+        clienteNombre,
+        clienteEmail,
+        clienteDireccion,
+        clienteTelefono,
+        itemsCarrito,
+        moItems
+      };
+      guardarBorrador(DRAFT_KEY, datosActuales);
+      // console.log("Auto-guardado en local...");
+    }, 1000); // Debounce de 1 segundo
+
+    return () => clearTimeout(timer);
+  }, [casoId, clienteNombre, clienteEmail, clienteDireccion, clienteTelefono, itemsCarrito, moItems, isLoadedFromDB]);
+
+
+  // --- FUNCIÓN MANUAL DE IA ---
   const handlePedirSugerencias = async () => {
     if (itemsCarrito.length === 0) {
       alert("Agrega materiales al carrito primero.");
@@ -139,7 +187,12 @@ const Cotizador = () => {
       if (res.status === 'success') {
         setAiSugerencias(res.sugerencias);
       }
-    } catch (e) { console.error(e); } finally { setAiLoading(false); }
+    } catch (e) {
+      console.error(e);
+      alert("Sin conexión para consultar IA.");
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   // --- Lógica de Materiales ---
@@ -156,7 +209,6 @@ const Cotizador = () => {
     setBusqueda(''); setSugerencias([]);
   };
 
-  // ✅ CORRECCIÓN: Restauramos la función faltante
   const cancelarSeleccion = () => {
     setMaterialSeleccionado(null);
   };
@@ -173,7 +225,7 @@ const Cotizador = () => {
     setItemsCarrito([...itemsCarrito, nuevoItem]);
     setMaterialSeleccionado(null);
     setCantidad('');
-    setAiSugerencias([]); // Limpiar sugerencias viejas
+    setAiSugerencias([]);
   };
 
   const eliminarItem = (index) => {
@@ -201,7 +253,7 @@ const Cotizador = () => {
     setMoItems(lista);
   };
 
-  // --- LÓGICA DE ENVÍO ---
+  // --- LÓGICA DE ENVÍO (MODO OFFLINE-FIRST) ---
   const handleEnviar = async () => {
     if (moItems.length === 0 || !clienteEmail) {
       setError("Faltan datos: Tareas o Email.");
@@ -238,39 +290,37 @@ const Cotizador = () => {
     setError('');
     setEnviando(true);
 
+    // Preparamos el payload exacto para el Backend
+    const payload = {
+      tecnico_id: user?.email || 'sistema@lete.com',
+      tecnico_nombre: user?.nombre || user?.user_metadata?.name || 'Ingeniero',
+      cliente_nombre: clienteNombre,
+      cliente_email: clienteEmail,
+      cliente_direccion: clienteDireccion,
+      cliente_telefono: clienteTelefono,
+      caso_id: casoId,
+      items: itemsCarrito.map(i => ({ id_recurso: i.id_recurso, cantidad: i.cantidad })),
+      mano_de_obra: moItems
+    };
+
     try {
-      const payload = {
-        tecnico_id: user?.email || 'sistema@lete.com',
-        tecnico_nombre: user?.nombre || user?.user_metadata?.name || 'Ingeniero',
-        cliente_nombre: clienteNombre,
-        cliente_email: clienteEmail,
-        cliente_direccion: clienteDireccion,
-        cliente_telefono: clienteTelefono,
-        caso_id: casoId,
-        items: itemsCarrito.map(i => ({ id_recurso: i.id_recurso, cantidad: i.cantidad })),
-        mano_de_obra: moItems
-      };
+      // A) GUARDAR EN COLA LOCAL (IndexedDB)
+      await encolarParaEnvio('cotizacion', payload);
 
-      const data = await guardarCotizacion(payload);
+      // B) ELIMINAR BORRADOR (Porque ya se finalizó)
+      await eliminarBorrador(DRAFT_KEY);
 
-      if (data.status === 'success') {
-        if (casoId) {
-          try {
-            await api.patch(`/casos/${casoId}`, { status: 'completado' });
-          } catch (patchError) {
-            console.error("Error al actualizar el caso a completado:", patchError);
-            // Opcional: informar al usuario que la cotización se creó pero el caso no se actualizó.
-          }
-        }
-        setResultadoEnvio({
-          estado: data.estado_final || 'ENVIADA',
-          mensaje: data.message
-        });
-      } else {
-        setError(data.error || "Error al guardar.");
-      }
+      // C) DISPARAR SINCRONIZACIÓN (Intento de subida en segundo plano)
+      syncManager.procesarCola();
+
+      // D) FEEDBACK INMEDIATO Y SALIDA
+      alert('✅ Cotización guardada.\n\nEl sistema la procesará y notificará al cliente en cuanto se genere el PDF.\n\nPuedes continuar con otras tareas.');
+
+      navigate('/'); // Nos vamos al inicio
+
     } catch (err) {
-      setError("Error de conexión: " + err.message);
+      console.error(err);
+      setError("Error crítico al guardar en disco local.");
     } finally {
       setEnviando(false);
     }
@@ -278,36 +328,7 @@ const Cotizador = () => {
 
   if (loading) return <div className="p-4">Cargando...</div>;
 
-  // --- PANTALLA DE RESULTADO ---
-  if (resultadoEnvio) {
-    const esRevision = resultadoEnvio.estado === 'PENDIENTE_AUTORIZACION';
-    const estiloContenedor = esRevision
-      ? { background: '#fff3cd', color: '#856404', border: '1px solid #ffeeba' }
-      : { background: '#d4edda', color: '#155724', border: '1px solid #c3e6cb' };
-
-    return (
-      <div style={{ padding: '40px 20px', textAlign: 'center', borderRadius: '8px', margin: '20px', ...estiloContenedor }}>
-        <div style={{ fontSize: '50px', marginBottom: '10px' }}>{esRevision ? '⏳' : '✅'}</div>
-        <h2>{esRevision ? 'En Revisión' : '¡Enviada!'}</h2>
-
-        {!esRevision && <p style={{ fontWeight: 'bold' }}>{resultadoEnvio.mensaje}</p>}
-        {!esRevision && <p>El cliente recibirá el PDF en su correo ({clienteEmail}) en breve.</p>}
-
-        {esRevision && (
-          <div style={{ textAlign: 'left', background: 'rgba(255,255,255,0.5)', padding: '15px', borderRadius: '8px', margin: '20px 0' }}>
-            <p style={{ fontWeight: 'bold', margin: '0 0 10px 0' }}>📋 Estatus: Pendiente de Validación</p>
-            <p style={{ fontSize: '0.9em', margin: 0 }}>Tu cotización requiere validación administrativa. No necesitas hacer nada más.</p>
-          </div>
-        )}
-
-        <button onClick={() => window.location.reload()} style={{ padding: '12px 24px', background: '#007bff', color: 'white', border: 'none', borderRadius: '5px', marginTop: '20px', cursor: 'pointer' }}>
-          Nueva Cotización
-        </button>
-      </div>
-    );
-  }
-
-  // Estilo común corregido (box-sizing)
+  // Estilo común
   const commonInputStyle = {
     width: '100%', padding: '10px', border: '1px solid #ccc',
     borderRadius: '5px', boxSizing: 'border-box'
@@ -322,7 +343,7 @@ const Cotizador = () => {
         {/* CABECERA CON BOTÓN VOLVER */}
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
           <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', marginRight: '10px' }}>⬅️</button>
-          <h2 style={{ margin: 0 }}>⚡ Cotizador Rápido</h2>
+          <h2 style={{ margin: 0 }}>⚡ Cotizador (Offline)</h2>
         </div>
 
         {/* DATOS CLIENTE */}
@@ -335,13 +356,10 @@ const Cotizador = () => {
               onChange={(e) => setClienteNombre(e.target.value)}
               style={commonInputStyle}
               placeholder="Nombre del cliente"
-              disabled={!!casoId} // Deshabilitar si viene de un caso
+              disabled={!!casoId}
             />
           </div>
 
-          {/* ======================================================= */}
-          {/* ===========   AÑADIR CAMPO DE DIRECCIÓN   =========== */}
-          {/* ======================================================= */}
           <div style={{ marginBottom: '10px' }}>
             <label style={{ display: 'block', fontSize: '0.9em', color: '#666' }}>Dirección (Opcional)</label>
             <input
@@ -350,10 +368,9 @@ const Cotizador = () => {
               onChange={(e) => setClienteDireccion(e.target.value)}
               style={commonInputStyle}
               placeholder="Dirección del cliente"
-              disabled={!!casoId} // Deshabilitar si viene de un caso
+              disabled={!!casoId}
             />
           </div>
-          {/* ======================================================= */}
 
           <div style={{ marginBottom: '10px' }}>
             <label style={{ display: 'block', fontSize: '0.9em', color: '#666' }}>Teléfono (Opcional)</label>
@@ -363,7 +380,7 @@ const Cotizador = () => {
               onChange={(e) => setClienteTelefono(e.target.value)}
               style={commonInputStyle}
               placeholder="Teléfono del cliente"
-              disabled={!!casoId} // Deshabilitar si viene de un caso
+              disabled={!!casoId}
             />
           </div>
 
@@ -463,10 +480,7 @@ const Cotizador = () => {
           {enviando ? (
             <div className="spinner-container">
               <div className="spinner"></div>
-              <p><strong>Procesando cotización...</strong></p>
-              <p style={{ fontSize: '0.9em', color: '#666' }}>
-                Esto puede tardar hasta 2 minutos mientras la IA audita los costos. No cierres esta ventana.
-              </p>
+              <p><strong>Guardando en cola de envío...</strong></p>
             </div>
           ) : (
             <button
@@ -474,7 +488,7 @@ const Cotizador = () => {
               disabled={enviando}
               style={{ width: '100%', padding: '15px', background: '#28a745', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold' }}
             >
-              ➡️ Generar Cotización
+              ➡️ Finalizar Cotización
             </button>
           )}
         </div>

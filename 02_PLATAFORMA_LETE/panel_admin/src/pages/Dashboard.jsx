@@ -93,6 +93,24 @@ function Dashboard() {
           </Link>
 
           <Link
+            to="/crm"
+            className="main-button"
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', /* Degradado Morado IA */
+              textDecoration: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: '200px',
+              color: 'white',
+              fontWeight: 'bold',
+              boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+            }}
+          >
+            🧠 CRM Inteligente
+          </Link>
+
+          <Link
             to="/configuracion"
             style={{ display: 'flex', alignItems: 'center', padding: '10px', background: '#333', color: 'white', borderRadius: '5px', textDecoration: 'none' }}
           >

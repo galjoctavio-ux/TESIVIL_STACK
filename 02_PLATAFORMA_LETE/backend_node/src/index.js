@@ -17,6 +17,8 @@ import configRoutes from './routes/config.routes.js';
 // 👇 1. AGREGA ESTA LÍNEA AQUÍ
 import integracionRoutes from './routes/integracion.routes.js';
 import agendaGlobalRoutes from './routes/agendaGlobal.routes.js';
+// 👇 1. IMPORTAR RUTAS DE NOTIFICACIONES
+import notificationsRoutes from './routes/notifications.routes.js'; // <--- AGREGAR ESTO
 
 import './services/eaDatabase.js';
 
@@ -56,6 +58,8 @@ apiRouter.use('/finanzas', finanzasRoutes);
 apiRouter.use('/config', configRoutes); // <--- 1. AGREGAR AQUÍ (Mover de abajo hacia acá)
 // 👇 2. AGREGA ESTA LÍNEA AQUÍ
 apiRouter.use('/integracion', integracionRoutes);
+// 👇 2. REGISTRAR EL ENDPOINT DE NOTIFICACIONES
+apiRouter.use('/notifications', notificationsRoutes); // <--- AGREGAR ESTO
 // ¡IMPORTANTE! Montamos nuestro router en el prefijo
 app.use('/lete/api', apiRouter);
 app.use('/api/global-agenda', agendaGlobalRoutes);
