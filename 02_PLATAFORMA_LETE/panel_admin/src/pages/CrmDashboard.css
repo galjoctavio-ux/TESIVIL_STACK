@@ -506,3 +506,130 @@
 .map-link-btn:hover {
     text-decoration: underline;
 }
+
+/* --- Estilos específicos para CrmDashboardV2 (Semáforos de Verdad) --- */
+
+.crm-table td,
+.crm-table th {
+    /* Ajuste para que las celdas acomoden los badges y barras */
+    vertical-align: top;
+    padding: 12px 8px;
+}
+
+.integrity-status-cell {
+    font-weight: bold;
+}
+
+/* Estilos de las etiquetas de estado */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    margin-top: 5px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.status-badge svg {
+    margin-right: 5px;
+}
+
+/* Semáforo de Integridad */
+.status-badge.critical {
+    background-color: #fce4e4;
+    /* Rojo suave */
+    color: #e53935;
+    /* Rojo fuerte */
+    border: 1px solid #e53935;
+    animation: pulse-red 1s infinite alternate;
+    /* Efecto de alerta */
+}
+
+.status-badge.warning {
+    background-color: #fffde7;
+    /* Amarillo suave */
+    color: #fbc02d;
+    /* Amarillo fuerte */
+    border: 1px solid #fbc02d;
+}
+
+.status-badge.success {
+    background-color: #e8f5e9;
+    /* Verde suave */
+    color: #43a047;
+    /* Verde fuerte */
+    border: 1px solid #43a047;
+}
+
+.status-badge.intent-badge {
+    background-color: #e3f2fd;
+    color: #1e88e5;
+    font-size: 0.75em;
+    margin-top: 8px;
+    font-weight: 500;
+}
+
+/* Animación de parpadeo para estados críticos */
+@keyframes pulse-red {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0.7;
+    }
+}
+
+
+/* --- Estilos Financieros (Barras de Progreso) --- */
+
+.finance-status {
+    width: 100%;
+    min-width: 150px;
+}
+
+.progress-bar-container {
+    background-color: #eee;
+    border-radius: 4px;
+    overflow: hidden;
+    height: 10px;
+    margin-bottom: 5px;
+    width: 90%;
+    /* Ajuste visual */
+}
+
+.progress-bar {
+    height: 100%;
+    transition: width 0.3s ease-in-out;
+}
+
+.finance-status small {
+    display: block;
+    font-size: 0.8em;
+    color: #4b5563;
+    /* Gris oscuro para el texto */
+}
+
+/* Botón de acción para arreglar la agenda */
+.action-btn.primary-action {
+    background-color: #e53935;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    display: inline-flex;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.action-btn.primary-action:hover {
+    background-color: #c62828;
+}
+
+.action-btn.primary-action svg {
+    margin-right: 5px;
+}

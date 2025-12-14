@@ -11,6 +11,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import ConfiguracionPagos from './pages/ConfiguracionPagos';
 import GestionFinanciera from './pages/GestionFinanciera';
 import CrmDashboard from './pages/CrmDashboard';
+import CrmDashboardV2 from './pages/CrmDashboardV2.jsx';
 import './App.css';
 import './responsive.css';
 
@@ -76,6 +77,16 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['admin', 'superadmin']}>
             <CrmDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 2. AGREGA ESTA NUEVA RUTA AQUÍ */}
+      <Route
+        path="/crm-v2"
+        element={
+          <ProtectedRoute allowedRoles={['admin', 'superadmin']}>
+            <CrmDashboardV2 />
           </ProtectedRoute>
         }
       />
