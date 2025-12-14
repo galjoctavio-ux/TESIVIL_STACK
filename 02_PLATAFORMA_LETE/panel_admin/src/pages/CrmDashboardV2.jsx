@@ -223,10 +223,8 @@ const CrmDashboardV2 = () => {
                                             ) : 'No Agendado'}
                                         </td>
 
-                                        {/* Columna 4: TÉCNICO (NUEVA) */}
                                         <td>
-                                            {cliente.cita_real?.tecnico || casoReciente?.tecnico_id || 'Pendiente'}
-                                            {/* Nota: Aquí faltaría el cruce de técnico_id_ea vs tecnico_id_supabase para la alerta (Fase de Refinamiento) */}
+                                            {cliente.cita_real?.tecnico || cliente.tecnico_caso_supa || 'Pendiente'}
                                         </td>
 
                                         {/* Columna 5: FINANZAS (NUEVA) */}
