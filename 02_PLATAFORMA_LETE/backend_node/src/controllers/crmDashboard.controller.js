@@ -11,7 +11,6 @@ export const getCrmDashboardV2 = async (req, res) => {
         console.log("🔄 Ejecutando Auditoría CRM V2...");
 
         // 1. OBTENER DATOS DE SUPABASE (La Verdad del Negocio)
-        // Traemos clientes, casos y el perfil del técnico asignado al caso
         const { data: clientesSupa, error: errorSupa } = await supabase
             .from('clientes')
             .select(`
@@ -35,7 +34,6 @@ export const getCrmDashboardV2 = async (req, res) => {
         if (errorSupa) throw new Error(`Error Supabase: ${errorSupa.message}`);
 
         // 2. OBTENER DATOS DE MARIADB (La Verdad de la Agenda)
-        // Traemos citas desde hace 30 días y todo el futuro para asegurar el match
         const queryMaria = `
             SELECT 
                 a.id AS cita_id,
@@ -65,81 +63,126 @@ export const getCrmDashboardV2 = async (req, res) => {
             // Normalizar teléfono del cliente (solo dígitos, últimos 10)
             const telefonoCliente = (cliente.telefono || '').replace(/\D/g, '').slice(-10);
 
-            // --- LÓGICA DE MATCH (PRIORIDAD JSON) ---
-            const citaEncontrada = citasMaria.find(cita => {
+            // --- LÓGICA DE MATCH REFINADA ---
+            let matchPorJson = false;
+            let matchPorTelefono = false;
+            let citaEncontradaData = null;
 
-                // A. Intentar Match por JSON (Infalible - Prioridad Alta)
+            // Buscamos en todas las citas para ver cuál coincide mejor
+            const citaMatch = citasMaria.find(cita => {
+                let isJsonMatch = false;
+                let isPhoneMatch = false;
+
+                // A. Intentar Match por JSON (Prioridad Absoluta según Regla de Negocio)
                 if (cita.notas_estructuradas && clienteCaseIds.length > 0) {
                     try {
                         const notas = JSON.parse(cita.notas_estructuradas);
-                        // Si la cita tiene un caso_id que pertenece a este cliente -> ¡ES UN MATCH!
                         if (notas.caso_id && clienteCaseIds.includes(String(notas.caso_id))) {
-                            return true;
+                            isJsonMatch = true;
                         }
                     } catch (e) {
-                        // JSON inválido o vacío, continuamos a la siguiente estrategia
+                        // JSON inválido, ignorar
                     }
                 }
 
-                // B. Intentar Match por Teléfono (Fallback - Prioridad Media)
-                // Solo si el teléfono es válido (10 dígitos)
+                // B. Intentar Match por Teléfono (Secundario)
                 const telefonoCita = (cita.cliente_telefono || '').replace(/\D/g, '').slice(-10);
                 if (telefonoCliente && telefonoCliente.length === 10 && telefonoCita === telefonoCliente) {
-                    return true;
+                    isPhoneMatch = true;
                 }
 
+                // Guardamos el tipo de match encontrado
+                if (isJsonMatch) {
+                    matchPorJson = true;
+                    return true; // Encontramos el match ideal, dejamos de buscar
+                }
+                if (isPhoneMatch) {
+                    matchPorTelefono = true;
+                    // No retornamos true inmediatamente si solo es teléfono, 
+                    // idealmente quisiéramos seguir buscando un match por JSON si existe,
+                    // pero para simplificar, si encontramos match por teléfono lo guardamos temporalmente.
+                    // (Nota: find devuelve el primero que cumple true. Si queremos prioridad JSON, 
+                    // deberíamos buscar primero JSON y luego Teléfono en dos pasadas o ordenar, 
+                    // pero dado el volumen, asumiremos que si hay JSON match lo encontraremos).
+                    // Para asegurar prioridad JSON, haremos el return solo si es JSON, o al final si es Tel.
+                    // Pero como .find se detiene al primer true, ajustaremos la estrategia:
+                    return false;
+                }
                 return false;
             });
+
+            // Re-estrategia de búsqueda para asegurar prioridad JSON sobre Teléfono
+            // 1. Buscar match estricto por JSON
+            citaEncontradaData = citasMaria.find(cita => {
+                if (!cita.notas_estructuradas || clienteCaseIds.length === 0) return false;
+                try {
+                    const notas = JSON.parse(cita.notas_estructuradas);
+                    return notas.caso_id && clienteCaseIds.includes(String(notas.caso_id));
+                } catch (e) { return false; }
+            });
+
+            if (citaEncontradaData) {
+                matchPorJson = true;
+            } else {
+                // 2. Si no hay JSON match, buscar por Teléfono
+                citaEncontradaData = citasMaria.find(cita => {
+                    const telefonoCita = (cita.cliente_telefono || '').replace(/\D/g, '').slice(-10);
+                    return telefonoCliente && telefonoCliente.length === 10 && telefonoCita === telefonoCliente;
+                });
+                if (citaEncontradaData) matchPorTelefono = true;
+            }
+
 
             // --- LÓGICA DE DIAGNÓSTICO (SEMÁFORO) ---
             let integridad = 'OK';
             let mensajeIntegridad = 'Lead OK';
             let accionSugerida = 'VER_DETALLES';
 
-            const tieneIntencionCita = cliente.crm_intent === 'APPOINTMENT' || cliente.crm_intent === 'QUOTE_FOLLOWUP';
-            const tieneCitaReal = !!citaEncontrada;
+            // CORRECCIÓN 1: Intención solo es APPOINTMENT
+            const tieneIntencionCita = cliente.crm_intent === 'APPOINTMENT';
 
-            if (tieneIntencionCita && !tieneCitaReal) {
-                // Caso Crítico: IA dice que debe haber cita, pero no la encontramos en Agenda
-                integridad = 'ERROR_GHOST';
-                mensajeIntegridad = '🚨 Cita Fantasma';
-                accionSugerida = 'REVISAR_MANUAL';
-            } else if (!tieneIntencionCita && tieneCitaReal) {
-                // Caso Advertencia: Hay cita, pero la IA no la procesó (Agendado por humano directo)
-                integridad = 'MANUAL';
-                mensajeIntegridad = '⚠️ Agendado Manual';
-                accionSugerida = 'VER_DETALLES';
-            } else if (tieneIntencionCita && tieneCitaReal) {
-                // Caso Ideal: Todo coincide
-                integridad = 'OK';
-                mensajeIntegridad = 'Sincronizado';
-                accionSugerida = 'VER_DETALLES';
-            } else if (cliente.crm_status === 'CLIENTE' && !tieneCitaReal) {
-                // Cliente recurrente sin actividad actual
-                mensajeIntegridad = 'Cliente Inactivo';
-                accionSugerida = 'VER_DETALLES';
+            // CORRECCIÓN 2: Lógica estricta de Fantasmas
+            if (tieneIntencionCita) {
+                if (matchPorJson) {
+                    // Ideal: Intención Appointment y Cita ligada por Caso ID
+                    integridad = 'OK';
+                    mensajeIntegridad = 'Sincronizado';
+                    accionSugerida = 'VER_DETALLES';
+                } else {
+                    // Si es APPOINTMENT y no tiene match por JSON -> FANTASMA
+                    // (Incluso si tuviera match por teléfono, al no estar ligada el caso, es un error de integridad para este flujo)
+                    integridad = 'ERROR_GHOST';
+                    mensajeIntegridad = matchPorTelefono ? '🚨 Cita Mal Ligada (Sin Caso)' : '🚨 Cita Fantasma';
+                    accionSugerida = 'REVISAR_MANUAL';
+                }
+            } else {
+                // Si NO es APPOINTMENT (ej. Quote Followup, Lead, etc.)
+                if (citaEncontradaData) {
+                    // Tiene cita pero la IA no marca Appointment -> Manual
+                    integridad = 'MANUAL';
+                    mensajeIntegridad = '⚠️ Agendado Manual';
+                    accionSugerida = 'VER_DETALLES';
+                } else if (cliente.crm_status === 'CLIENTE') {
+                    mensajeIntegridad = 'Cliente Inactivo';
+                }
             }
 
             // --- DETERMINAR NOMBRE DEL TÉCNICO ---
             let tecnicoNombreFinal = 'Pendiente';
 
-            if (tieneCitaReal) {
-                // Si hay cita real, la verdad está en MariaDB (quien va a ir realmente)
-                tecnicoNombreFinal = `${citaEncontrada.tecnico_nombre} ${citaEncontrada.tecnico_apellido}`;
+            if (citaEncontradaData) {
+                tecnicoNombreFinal = `${citaEncontradaData.tecnico_nombre} ${citaEncontradaData.tecnico_apellido}`;
             } else if (cliente.casos?.length > 0) {
-                // Si no hay cita, buscamos a quién se asignó el último caso en Supabase
-                const ultimoCaso = cliente.casos[0]; // Supabase devuelve ordenado si el query lo pide, aquí tomamos el primero del array
+                const ultimoCaso = cliente.casos[0];
                 if (ultimoCaso.profiles) {
-                    // Supabase puede devolver un objeto o un array dependiendo de la relación (one-to-one vs one-to-many)
                     tecnicoNombreFinal = Array.isArray(ultimoCaso.profiles)
                         ? ultimoCaso.profiles[0]?.nombre
                         : ultimoCaso.profiles.nombre;
                 }
             }
 
-            // --- CÁLCULO DE FINANZAS (SOLO LECTURA) ---
+            // --- CÁLCULO DE FINANZAS ---
             const saldoPendiente = parseFloat(cliente.saldo_pendiente || 0);
-            // Sumamos lo cobrado históricamente de todos los casos de este cliente
             const totalCobrado = cliente.casos?.reduce((sum, caso) => sum + (parseFloat(caso.monto_cobrado) || 0), 0) || 0;
 
             return {
@@ -148,12 +191,13 @@ export const getCrmDashboardV2 = async (req, res) => {
                 telefono: cliente.telefono,
                 crm_intent: cliente.crm_intent,
                 ai_summary: cliente.ai_summary,
-                last_interaction: cliente.last_interaction, // Necesario para ordenar por actividad reciente
+                last_interaction: cliente.last_interaction,
 
-                cita_real: tieneCitaReal ? {
-                    fecha: citaEncontrada.start_datetime,
-                    tecnico: `${citaEncontrada.tecnico_nombre} ${citaEncontrada.tecnico_apellido}`,
-                    id_cita: citaEncontrada.cita_id
+                cita_real: citaEncontradaData ? {
+                    fecha: citaEncontradaData.start_datetime,
+                    tecnico: `${citaEncontradaData.tecnico_nombre} ${citaEncontradaData.tecnico_apellido}`,
+                    id_cita: citaEncontradaData.cita_id,
+                    match_type: matchPorJson ? 'JSON_CASO' : 'TELEFONO' // Útil para debug visual si lo necesitas
                 } : null,
 
                 tecnico_asignado: tecnicoNombreFinal || 'Sin Asignar',
@@ -163,13 +207,13 @@ export const getCrmDashboardV2 = async (req, res) => {
                 accion_sugerida: accionSugerida,
 
                 finanzas: {
-                    total_cotizado: totalCobrado + saldoPendiente, // Estimado
+                    total_cotizado: totalCobrado + saldoPendiente,
                     total_pagado: totalCobrado,
                     saldo_pendiente: saldoPendiente,
                     status_pago: saldoPendiente > 0 ? 'DEUDA' : 'AL_CORRIENTE'
                 },
 
-                casos: cliente.casos // Se envía para debugging o detalles futuros
+                casos: cliente.casos
             };
         });
 
