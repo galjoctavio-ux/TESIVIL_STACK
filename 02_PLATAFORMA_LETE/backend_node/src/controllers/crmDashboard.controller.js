@@ -1,30 +1,33 @@
 import pool from '../services/eaDatabase.js';
 import { supabaseAdmin as supabase } from '../services/supabaseClient.js';
+
 /**
- * CONTROLADOR MAESTRO DEL DASHBOARD CRM
- * Objetivo: Cruzar la verdad de la IA (Supabase) con la verdad Operativa (MariaDB/EasyAppointments)
+ * CONTROLADOR MAESTRO DEL DASHBOARD CRM V2 (CORREGIDO SEGÚN SCHEMA)
  */
 export const getCrmDashboardV2 = async (req, res) => {
     try {
         console.log("🔄 Iniciando sincronización de Dashboard CRM V2...");
 
-        // DESPUÉS (Versión corregida y segura)
+        // 1. OBTENER DATOS DE SUPABASE (Validado con Schema)
         const { data: clientesSupa, error: errorSupa } = await supabase
             .from('clientes')
             .select(`
-        *,
-        casos (
-            id, status, descripcion, costo_total, pago_realizado, tecnico_id, created_at
-        )
-        // Eliminamos la consulta a billetera_transacciones para evitar el error de relación
-    `)
+                *,
+                casos (
+                    id, 
+                    status, 
+                    descripcion_problema, 
+                    monto_cobrado, 
+                    tecnico_id, 
+                    created_at
+                )
+            `)
             .order('last_interaction', { ascending: false })
             .limit(100);
+
         if (errorSupa) throw new Error(`Error Supabase: ${errorSupa.message}`);
 
-        // 2. OBTENER DATOS DE MARIADB (La realidad operativa / Agenda)
-        // Traemos citas FUTURAS y RECIENTES (últimos 7 días) para ver si se cumplieron
-        // Hacemos JOIN con ea_users para saber quién es el cliente y quién el técnico
+        // 2. OBTENER DATOS DE MARIADB (Agenda)
         const queryMaria = `
             SELECT 
                 a.id AS cita_id,
@@ -49,21 +52,16 @@ export const getCrmDashboardV2 = async (req, res) => {
         // 3. EL GRAN CRUCE (THE MERGE)
         const datosUnificados = clientesSupa.map(cliente => {
 
-            // A. Normalización de Teléfono para el Match
-            // Quitamos caracteres no numéricos y tomamos los últimos 10 dígitos
+            // A. Normalización
             const telefonoCliente = (cliente.telefono || '').replace(/\D/g, '').slice(-10);
 
-            // B. Buscar coincidencia en la Agenda (MariaDB)
-            // Estrategia: Coincidencia por teléfono O coincidencia por ID en notas_estructuradas (si existe)
+            // B. Buscar coincidencia en Agenda
             const citaEncontrada = citasMaria.find(cita => {
                 const telefonoCita = (cita.cliente_telefono || '').replace(/\D/g, '').slice(-10);
-                const matchTelefono = telefonoCliente && telefonoCita === telefonoCliente;
-
-                // Futuro: Aquí podríamos buscar también por ID si guardas {"supabase_id": "..."} en notas_estructuradas
-                return matchTelefono;
+                return telefonoCliente && telefonoCita === telefonoCliente;
             });
 
-            // C. Calcular Integridad (Semáforo de Verdad)
+            // C. Calcular Integridad
             let integridad = 'OK';
             let mensajeIntegridad = 'Sincronizado';
             let accionSugerida = 'VER_DETALLES';
@@ -72,51 +70,54 @@ export const getCrmDashboardV2 = async (req, res) => {
             const tieneCitaReal = !!citaEncontrada;
 
             if (tieneIntencionCita && !tieneCitaReal) {
-                integridad = 'ERROR_GHOST'; // IA dice cita, Agenda vacía
+                integridad = 'ERROR_GHOST';
                 mensajeIntegridad = '🚨 Cita Fantasma';
                 accionSugerida = 'AGENDAR_AHORA';
             } else if (!tieneIntencionCita && tieneCitaReal) {
-                integridad = 'MANUAL'; // Agenda tiene cita, IA no sabía
+                integridad = 'MANUAL';
                 mensajeIntegridad = '⚠️ Agendado Manual';
             }
 
-            // D. Calcular Finanzas del Cliente
-            const totalCotizado = cliente.casos?.reduce((sum, caso) => sum + (caso.costo_total || 0), 0) || 0;
-            // Aquí sumamos pagos reales de la tabla de transacciones o de la columna pago_realizado
-            const totalPagado = cliente.casos?.reduce((sum, caso) => sum + (caso.pago_realizado || 0), 0) || 0;
-            const saldoPendiente = totalCotizado - totalPagado;
+            // D. Calcular Finanzas (Adaptado a tu Schema)
+            // Usamos 'saldo_pendiente' directo de la tabla clientes
+            const saldoPendiente = parseFloat(cliente.saldo_pendiente || 0);
+
+            // Estimamos lo cobrado sumando 'monto_cobrado' de los casos históricos
+            const totalCobrado = cliente.casos?.reduce((sum, caso) => sum + (parseFloat(caso.monto_cobrado) || 0), 0) || 0;
+
+            // Calculamos un "Total Cotizado Aproximado" para la barra de progreso
+            const totalCotizadoEstimado = totalCobrado + saldoPendiente;
 
             return {
-                // Datos base de Supabase
                 id: cliente.id,
                 nombre_completo: cliente.nombre_completo || 'Sin Nombre',
                 telefono: cliente.telefono,
                 crm_intent: cliente.crm_intent,
                 ai_summary: cliente.ai_summary,
 
-                // Datos enriquecidos de MariaDB
                 cita_real: tieneCitaReal ? {
                     fecha: citaEncontrada.start_datetime,
                     tecnico: `${citaEncontrada.tecnico_nombre} ${citaEncontrada.tecnico_apellido}`,
                     id_cita: citaEncontrada.cita_id
                 } : null,
 
-                // Diagnóstico del sistema
                 status_integridad: integridad,
                 mensaje_integridad: mensajeIntegridad,
                 accion_sugerida: accionSugerida,
 
-                // Finanzas Calculadas
                 finanzas: {
-                    total_cotizado: totalCotizado,
-                    total_pagado: totalPagado,
-                    saldo_pendiente: saldoPendiente > 0 ? saldoPendiente : 0,
+                    total_cotizado: totalCotizadoEstimado,
+                    total_pagado: totalCobrado,
+                    saldo_pendiente: saldoPendiente,
                     status_pago: saldoPendiente > 0 ? 'DEUDA' : 'AL_CORRIENTE'
-                }
+                },
+
+                // Pasamos los casos para mostrar detalles si se requiere
+                casos: cliente.casos
             };
         });
 
-        // 4. RESPUESTA AL FRONTEND
+        // 4. RESPUESTA
         res.json({
             success: true,
             total: datosUnificados.length,
