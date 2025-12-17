@@ -4,10 +4,14 @@ import Dexie from 'dexie';
 export const db = new Dexie('TesivilOfflineDB');
 
 db.version(2).stores({
-    // 'key' será un identificador único (ej: 'revision_123' o 'cotizacion_activa')
     borradores: '++id, &key, last_updated',
+    cola_sincronizacion: '++id, tipo, status, retry_count, timestamp'
+});
 
-    // Agregamos 'tipo' para saber si es revisión o cotización
+// Versión 3: Cambiamos 'key' a primary key para soportar upsert correctamente
+db.version(3).stores({
+    // 'key' ahora es el primary key para que put() haga upsert automático
+    borradores: 'key, last_updated',
     cola_sincronizacion: '++id, tipo, status, retry_count, timestamp'
 });
 
