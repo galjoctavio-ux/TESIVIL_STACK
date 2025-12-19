@@ -249,3 +249,70 @@ export const actualizarUbicacionCita = async (req, res) => {
         if (connection) connection.release();
     }
 };
+
+// D) FUNCIÓN NUEVA: Borrado Total (Hard Delete)
+export const borrarCitaGlobal = async (req, res) => {
+    const { id } = req.params; // ID de la cita en Easy!Appointments
+
+    if (!id) return res.status(400).json({ error: 'Falta ID de la cita' });
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        console.log(`🗑️ Iniciando borrado total para Cita EA ID: ${id}`);
+
+        // 1. Obtener información de la cita para buscar vínculos con Supabase
+        const [rows] = await connection.execute(
+            `SELECT notas_estructuradas FROM ea_appointments WHERE id = ?`,
+            [id]
+        );
+
+        if (rows.length === 0) {
+            // Si no existe en MariaDB, no podemos hacer mucho, terminamos.
+            connection.release();
+            return res.status(404).json({ error: 'Cita no encontrada en Easy!Appointments' });
+        }
+
+        // 2. Analizar JSON para ver si hay ID de Caso Supabase
+        const notas = rows[0].notas_estructuradas ? JSON.parse(rows[0].notas_estructuradas) : {};
+        const casoId = notas.caso_id;
+
+        // 3. Borrar en Supabase (Si existe vínculo)
+        if (casoId) {
+            console.log(`🔥 Borrando Caso #${casoId} en Supabase...`);
+
+            // Borramos el caso. Nota: Esto asume que tienes "On Delete Cascade" en tus tablas 
+            // de revisiones/fotos. Si no, habría que borrar esas tablas primero manualmente.
+            const { error: errorSupabase } = await supabaseAdmin
+                .from('casos')
+                .delete()
+                .eq('id', casoId);
+
+            if (errorSupabase) {
+                throw new Error('Error borrando en Supabase: ' + errorSupabase.message);
+            }
+        } else {
+            console.log('ℹ️ Cita sin vínculo a Supabase (solo agenda local).');
+        }
+
+        // 4. Borrar en MariaDB (Easy!Appointments)
+        console.log(`🔥 Borrando cita física en MariaDB...`);
+        await connection.execute(
+            `DELETE FROM ea_appointments WHERE id = ?`,
+            [id]
+        );
+
+        await connection.commit();
+        console.log('✅ Borrado total exitoso.');
+
+        res.json({ success: true, message: 'Cita y Caso eliminados correctamente.' });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('❌ Error en borrado total:', error);
+        res.status(500).json({ error: 'Error interno al intentar borrar la cita.' });
+    } finally {
+        if (connection) connection.release();
+    }
+};

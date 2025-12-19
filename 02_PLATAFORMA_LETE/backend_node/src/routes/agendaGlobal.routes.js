@@ -4,7 +4,8 @@ import { Router } from 'express';
 import {
     obtenerTecnicos,
     obtenerAgendaGlobal,
-    actualizarUbicacionCita
+    actualizarUbicacionCita,
+    borrarCitaGlobal
 } from '../controllers/agendaGlobal.controller.js';
 
 import { verifyLinkToken } from '../middleware/linkAuth.middleware.js';
@@ -21,5 +22,6 @@ router.get('/citas', obtenerAgendaGlobal);
 // 2. NUEVA RUTA DE ESCRITURA (PUT) 👇
 // Coincide con lo que pusimos en el Frontend: /citas/:id/location
 router.put('/citas/:id/location', actualizarUbicacionCita);
+router.delete('/citas/:id', borrarCitaGlobal);
 
 export default router;
