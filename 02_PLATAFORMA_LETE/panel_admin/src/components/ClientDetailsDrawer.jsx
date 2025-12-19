@@ -61,25 +61,45 @@ const ClientDetailsDrawer = ({ cliente, onClose }) => {
                         </div>
                     </div>
 
-                    {/* 3. PRÓXIMA ACCIÓN AUTOMÁTICA */}
+                    {/* 3. PRÓXIMA ACCIÓN AUTOMÁTICA (CON PREVIEW) */}
                     <div className="detail-section">
-                        <div className="section-title">🤖 Estado del Autómata (Cron)</div>
-                        {cliente.next_action?.tipo !== 'NADA' ? (
+                        <div className="section-title">🤖 Autómata (Cron)</div>
+                        {cliente.situacion?.tipo !== 'NADA' ? (
                             <div>
                                 <div style={{ 
                                     padding: '8px', 
                                     borderRadius: '4px', 
-                                    background: cliente.next_action?.color === 'red' ? '#fef2f2' : '#f0fdf4',
-                                    color: cliente.next_action?.color === 'red' ? '#b91c1c' : '#15803d',
+                                    background: cliente.situacion?.color === 'red' ? '#fef2f2' : '#f0fdf4',
+                                    color: cliente.situacion?.color === 'red' ? '#b91c1c' : '#15803d',
                                     fontWeight: 'bold',
                                     marginBottom: '5px'
                                 }}>
-                                    {cliente.next_action?.mensaje}
+                                    {cliente.situacion?.label}
                                 </div>
-                                <small>Fecha programada: {formatDate(cliente.next_action?.fecha)}</small>
+                                
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#64748b', marginBottom: '10px' }}>
+                                    <span>📅 Fecha: {formatDate(cliente.situacion?.fecha)}</span>
+                                    <span>⏰ Hora: {cliente.situacion?.hora_envio}</span>
+                                </div>
+
+                                {/* CAJA DEL MENSAJE (PREVIEW) */}
+                                {cliente.situacion?.draft && (
+                                    <div style={{ 
+                                        background: '#f8fafc', 
+                                        border: '1px dashed #cbd5e1', 
+                                        padding: '10px', 
+                                        borderRadius: '6px',
+                                        fontSize: '0.9rem',
+                                        color: '#334155',
+                                        fontStyle: 'italic'
+                                    }}>
+                                        📝 <strong>Se enviará esto:</strong><br/>
+                                        "{cliente.situacion.draft}"
+                                    </div>
+                                )}
                             </div>
                         ) : (
-                            <p>El bot está en reposo con este cliente.</p>
+                            <p>El bot está en reposo. Esperando interacción del cliente o acción manual.</p>
                         )}
                     </div>
 
