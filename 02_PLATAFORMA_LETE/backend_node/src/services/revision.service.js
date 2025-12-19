@@ -591,29 +591,29 @@ export const generarArtefactosYNotificar = async (dataContext, tecnicoAuth) => {
     // AQUI CONTINÚA LA SECCIÓN F (Envío de correo) normalmente...
 
     // -----------------------
-    // F. Envío de correo
+    // F. Envío de correos (Cliente + Copia Técnico)
     // -----------------------
     const clienteEmail = revisionData.cliente_email || casoUpdated?.cliente?.email || '';
 
+    // Preparamos la lista de hallazgos una sola vez
+    const manuales = revisionData.causas_alto_consumo || [];
+    const automaticos = revisionData.diagnosticos_automaticos || [];
+    let hallazgosCombinados = [...manuales, ...automaticos];
+
+    const listaFinalParaEmail = hallazgosCombinados
+      .map(item => {
+        if (typeof item === 'object' && item !== null) {
+          return item.texto || item.mensaje || item.description || '';
+        }
+        return String(item);
+      })
+      .filter(texto => texto && texto.trim().length > 0)
+      .filter((valor, indice, self) => self.indexOf(valor) === indice);
+
+    // 1. ENVIAR AL CLIENTE
     if (pdfUrl && clienteEmail) {
       try {
-        console.log(`Preparando datos para email a ${clienteEmail}...`);
-
-        // Unificar hallazgos manuales y automáticos
-        const manuales = revisionData.causas_alto_consumo || [];
-        const automaticos = revisionData.diagnosticos_automaticos || [];
-
-        let hallazgosCombinados = [...manuales, ...automaticos];
-
-        const listaFinalParaEmail = hallazgosCombinados
-          .map(item => {
-            if (typeof item === 'object' && item !== null) {
-              return item.texto || item.mensaje || item.description || '';
-            }
-            return String(item);
-          })
-          .filter(texto => texto && texto.trim().length > 0)
-          .filter((valor, indice, self) => self.indexOf(valor) === indice);
+        console.log(`Preparando email para CLIENTE: ${clienteEmail}...`);
 
         await enviarReportePorEmail(
           clienteEmail,
@@ -621,11 +621,30 @@ export const generarArtefactosYNotificar = async (dataContext, tecnicoAuth) => {
           pdfUrl,
           listaFinalParaEmail
         );
-        console.log("Email enviado con éxito.");
+        console.log("✅ Email al CLIENTE enviado con éxito.");
       } catch (mailErr) {
-        console.error('Error enviando correo:', mailErr?.message || mailErr);
-        // No lanzamos error aquí para no marcar todo el proceso como fallido si solo falló el email
-        // pero el PDF sí se generó. Aunque podrías decidir lo contrario.
+        console.error('❌ Error enviando correo al cliente:', mailErr?.message);
+      }
+    }
+
+    // 2. ENVIAR COPIA AL TÉCNICO (NUEVO BLOQUE)
+    // Verificamos que el técnico tenga email y que no sea el mismo que el del cliente
+    if (pdfUrl && tecnicoAuth.email && tecnicoAuth.email !== clienteEmail) {
+      try {
+        console.log(`Preparando copia para TÉCNICO: ${tecnicoAuth.email}...`);
+
+        // Agregamos un prefijo al nombre para que sepa que es copia
+        const nombreParaCopia = `[COPIA] ${casoUpdated?.cliente?.nombre_completo || 'Cliente'}`;
+
+        await enviarReportePorEmail(
+          tecnicoAuth.email,
+          nombreParaCopia,
+          pdfUrl,
+          listaFinalParaEmail
+        );
+        console.log("✅ Copia al TÉCNICO enviada con éxito.");
+      } catch (techMailErr) {
+        console.error('❌ Error enviando copia al técnico:', techMailErr?.message);
       }
     }
 

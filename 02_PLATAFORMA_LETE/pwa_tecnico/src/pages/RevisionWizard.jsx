@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-// import api from '../apiService'; // Ya no se usa directamente aquí
+import api from '../apiService';
 
 // --- NUEVOS IMPORTS PARA OFFLINE FIRST ---
 import { guardarBorrador, obtenerBorrador, encolarParaEnvio } from '../db';
@@ -162,16 +162,15 @@ const RevisionWizard = () => {
     setFormData(prev => ({ ...prev, ...newData }));
   };
 
-  // --- NUEVA LÓGICA DE SUBMIT (Offline Queue) ---
+  // --- LÓGICA DE SUBMIT HÍBRIDA (NETWORK FIRST) ---
   const handleSubmit = async () => {
-    // 1. Validaciones de seguridad
+    // 1. Validaciones
     if (!formData.caso_id) {
-      alert("Error: No se ha detectado el ID del caso. Vuelva a la agenda e intente de nuevo.");
+      alert("Error: No se ha detectado el ID del caso.");
       return;
     }
-
     if (!formData.cliente_email) {
-      alert("El correo del cliente es obligatorio para enviar el reporte.");
+      alert("El correo del cliente es obligatorio.");
       setCurrentStepIndex(0);
       return;
     }
@@ -179,29 +178,49 @@ const RevisionWizard = () => {
     setIsSubmitting(true);
 
     try {
-      // 2. ENCOLAR: En lugar de enviar a la API, lo guardamos en la cola local
-      await encolarParaEnvio(formData.caso_id, formData);
+      console.log("🚀 Intentando envío DIRECTO al servidor...");
 
-      // 3. DISPARAR SINCRONIZACIÓN: Intentamos subirlo inmediatamente, pero no esperamos
-      // La respuesta del servidor la manejará el SyncManager en segundo plano
-      syncManager.procesarCola();
+      // --- CORRECCIÓN CRÍTICA: ESTRUCTURAR EL PAYLOAD ---
+      // El backend espera: { revisionData: {...}, equiposData: [...], firmaBase64: "..." }
+      // Pero formData lo tiene todo mezclado. Vamos a separarlo:
 
-      // 4. Feedback Inmediato al Técnico
-      // Ahora la respuesta es casi instantánea, eliminando la excusa de "está cargando"
-      alert('✅ Reporte Finalizado y GUARDADO LOCALMENTE.\n\nSe subirá automáticamente al servidor cuando detectemos una conexión estable.\n\nPuedes cerrar la aplicación.');
+      const { equiposData, firmaBase64, ...datosGenerales } = formData;
 
-      // 5. Salir a la Agenda
+      const payloadCorrecto = {
+        revisionData: datosGenerales, // Aquí van los voltajes, cliente, id, etc.
+        equiposData: equiposData,     // Aquí va el array de equipos
+        firmaBase64: firmaBase64      // La firma va aparte
+      };
+
+      // Enviar el payload estructurado
+      const respuesta = await api.post('/revisiones', payloadCorrecto);
+      // ---------------------------------------------------
+
+      console.log("✅ Enviado con éxito:", respuesta.data);
+      alert('✅ Reporte ENVIADO y procesado por el servidor.');
       navigate('/');
 
-    } catch (error) {
-      console.error('Error al guardar en la cola local (IndexedDB):', error);
-      // Este es un error MUY raro, pero es la última línea de defensa.
-      alert('⚠️ Error crítico. No se pudo guardar la revisión ni siquiera localmente. Contacta a soporte.');
+    } catch (errorNetwork) {
+      console.warn('⚠️ Falló el envío directo, guardando en cola offline:', errorNetwork);
+
+      try {
+        // INTENTO 2: GUARDAR EN COLA (Fallback Offline)
+        await encolarParaEnvio(formData.caso_id, formData);
+
+        // Intentar despertar al SyncManager (sin await para no bloquear)
+        syncManager.procesarCola();
+
+        alert('⚠️ Sin conexión estable. El reporte se guardó LOCALMENTE y se subirá cuando recuperes internet.');
+        navigate('/');
+
+      } catch (errorDb) {
+        console.error('❌ Error crítico (ni red ni local):', errorDb);
+        alert('Error CRÍTICO: No se pudo guardar el reporte. Toma capturas de pantalla de los datos.');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
-  // ------------------------------------------
 
   const CurrentStepComponent = steps[currentStepIndex].component;
   const currentStepTitle = steps[currentStepIndex].title;
